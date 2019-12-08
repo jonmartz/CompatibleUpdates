@@ -45,14 +45,17 @@ def analyze_histories(dataset_path, user_directory, user_col):
         plt.title('user history length')
         plt.xlabel('history length')
         plt.ylabel('frequency')
-        plt.savefig(user_directory + '\\history_lengths.png')
+        plt.savefig(user_directory + '\\'+user_col+'_histories.png')
         # plt.show()
 
 
 def analyze_features(dataset_path, results_path, user_col, categ_cols):
     df = pd.read_csv(dataset_path)
 
-    del df[user_col]
+    try:
+        del df[user_col]
+    except KeyError:
+        pass
 
     for col in categ_cols:
     # for col in df.columns:
@@ -111,6 +114,7 @@ def analyze_features(dataset_path, results_path, user_col, categ_cols):
             plt.xlabel('category')
             plt.ylabel('frequency')
             plt.title(col)
+            plt.subplots_adjust(bottom=0.3)
 
             plt.savefig(results_path + '\\' + col + '.png')
             # plt.show()
@@ -364,9 +368,30 @@ def history_split_correlation_all_student_pairs():
 # categ_cols = ['userResponse', 'Currency', 'TypeOfClothing', 'Gender', 'InStock', 'Brand', 'Colour']
 # user_col = 'userID'
 
-dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific.csv'
-user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\analysis'
-categ_cols = ['is_finished', 'activity_context', 'grade_code']
-user_col = 'account_id'
+# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific.csv'
+# user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\analysis'
+# categ_cols = ['is_finished', 'activity_context', 'grade_code']
+# user_col = 'account_id'
 
-analyze_features(dataset_path, user_directory, user_col, categ_cols)
+# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
+# user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\analysis\\users'
+# # categ_cols = ['original_language', 'rating']
+# categ_cols = ['genre']
+# user_col = 'userId'
+
+# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
+# user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\analysis\\users'
+# # categ_cols = ['original_language', 'rating']
+
+dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
+user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\analysis'
+categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+
+if not os.path.exists(user_directory):
+    os.makedirs(user_directory)
+
+# user_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# for user_col in user_cols:
+#     analyze_histories(dataset_path, user_directory, user_col)
+
+analyze_features(dataset_path, user_directory, '', categ_cols)

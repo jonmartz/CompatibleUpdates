@@ -5,6 +5,7 @@ from sklearn.metrics import auc
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+import ast
 
 
 def binarize(path, bin_count, diss_types):
@@ -505,7 +506,7 @@ def safe_auc(x, y):
 
 
 def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, L1_log_path=None,
-                                  normalize=True, plot_area=False, skip_L_models=False, only_L1=False, method='bins'):
+                                  normalize=True, plot_area=False, plot_std=True, skip_L_models=False, only_L1=False, method='bins'):
 
     log_df = pd.read_csv(log_path)
     hybrid_stat_log_df = pd.read_csv(hybrid_stat_log_path)
@@ -561,6 +562,9 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
                 pd.DataFrame({'model': 'no hist', 'position': user_log['diss weight'], 'x': user_log['no hist x'], 'y': user_log['no hist y']}))
 
             if not skip_L_models:
+                merged_df = merged_df.append(
+                    pd.DataFrame({'model': 'baseline', 'position': user_log['diss weight'], 'x': user_log['baseline x'],
+                                  'y': user_log['baseline y']}))
                 if not only_L1:
                     merged_df = merged_df.append(
                         pd.DataFrame({'model': 'L0', 'position': user_log['diss weight'], 'x': user_log['L0 x'], 'y': user_log['L0 y']}))
@@ -615,6 +619,9 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
         no_hist_x = group_mean['x']
         no_hist_y = group_mean['y']
         if not skip_L_models:
+            group_mean = groups.get_group('baseline').groupby('position').mean()
+            baseline_x = group_mean['x']
+            baseline_y = group_mean['y']
             group_mean = groups.get_group('L1').groupby('position').mean()
             L1_x = group_mean['x']
             L1_y = group_mean['y']
@@ -644,9 +651,9 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
     elif method == 'ordered':
         if not skip_L_models:
             if not only_L1:
-                min_x = min([min(i) for i in [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
+                min_x = min([min(i) for i in [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
             else:
-                min_x = min([min(i) for i in [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
+                min_x = min([min(i) for i in [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
         else:
             min_x = min([min(i) for i in [no_hist_x, hybrid_stat_x, hybrid_nn_x]])
         
@@ -657,6 +664,7 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
 
     plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=14, label='no hist')
     if not skip_L_models:
+        plt.plot(baseline_x, baseline_y, 'k', marker='s', linewidth=3, markersize=8, label='baseline')
         plt.plot(L1_x, L1_y, 'm', marker='.', linewidth=3, markersize=14, label='L1')
         if not only_L1:
             plt.plot(L0_x, L0_y, 'r', marker='.', linewidth=3, markersize=14, label='L0')
@@ -667,9 +675,9 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
     colors = ['b', 'g', 'seagreen']
     if not skip_L_models:
         if not only_L1:
-            colors = ['b', 'r', 'm', 'orange', 'g', 'seagreen']
+            colors = ['b', 'k', 'r', 'm', 'orange', 'g', 'seagreen']
         else:
-            colors = ['b', 'm', 'g', 'seagreen']
+            colors = ['b', 'k', 'm', 'g', 'seagreen']
 
     # area
     if method == 'bins':
@@ -690,11 +698,11 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
             if not only_L1:
                 areas = [no_hist_area, L0_area, L1_area, L2_area, hybrid_stat_area, hybrid_nn_area]
                 col_labels = ['no hist', 'L0', 'L1', 'L2', 'hybrid stat', 'hybrid nn']
-                colors = ['b', 'r', 'm', 'orange', 'g', 'seagreen']
+                colors = ['b', 'k', 'r', 'm', 'orange', 'g', 'seagreen']
             else:
                 areas = [no_hist_area, L1_area, hybrid_stat_area, hybrid_nn_area]
                 col_labels = ['no hist', 'L1', 'hybrid stat', 'hybrid nn']
-                colors = ['b', 'm', 'g', 'seagreen']
+                colors = ['b', 'k', 'm', 'g', 'seagreen']
 
         cell_text = [(['%1.4f' % (area) for area in areas])]
         row_labels = ['area']
@@ -708,11 +716,11 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
     ys = [no_hist_y, hybrid_stat_y, hybrid_nn_y]
     if not skip_L_models:
         if not only_L1:
-            xs = [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
-            ys = [no_hist_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
+            xs = [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
+            ys = [no_hist_y, baseline_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
         else:
-            xs = [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]
-            ys = [no_hist_y, L1_y, hybrid_stat_y, hybrid_nn_y]
+            xs = [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]
+            ys = [no_hist_y, baseline_y, L1_y, hybrid_stat_y, hybrid_nn_y]
 
     if plot_area:
         for i in range(len(xs)):
@@ -720,7 +728,7 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
             y = ys[i]
             plt.fill_between(x, [h1_acc_mean] * len(x), y, facecolor=colors[i], alpha=0.2)
 
-    else:  # plot std
+    elif plot_std:  # plot std
         if method == 'bins':
             no_hist_std = groups.get_group('no hist').groupby('x').std()['y']
             if not skip_L_models:
@@ -734,6 +742,7 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
         elif method == 'ordered':
             no_hist_std = groups.get_group('no hist').groupby('position').std()['y']
             if not skip_L_models:
+                baseline_std = groups.get_group('baseline').groupby('position').std()['y']
                 L1_std = groups.get_group('L1').groupby('position').std()['y']
                 if not only_L1:
                     L0_std = groups.get_group('L0').groupby('position').std()['y']
@@ -744,9 +753,9 @@ def plots_averaged_over_all_users(num_bins, log_path, hybrid_stat_log_path, hybr
         stds = [no_hist_std, hybrid_stat_std, hybrid_nn_std]
         if not skip_L_models:
             if not only_L1:
-                stds = [no_hist_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
+                stds = [no_hist_std, baseline_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
             else:
-                stds = [no_hist_std, L1_std, hybrid_stat_std, hybrid_nn_std]
+                stds = [no_hist_std, baseline_std, L1_std, hybrid_stat_std, hybrid_nn_std]
         for i in range(len(xs)):
             x = xs[i]
             y = ys[i]
@@ -803,6 +812,102 @@ def deal_with_empty():
     df_fixed.to_csv(path_out, index=False)
 
 
+def split_genres():
+    movie_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\movies_metadata.csv'
+    # user_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\ratings_small.csv'
+    path_out = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\movies_splitted.csv'
+
+    columns = ['budget', 'genres', 'id', 'original_language', 'popularity', 'revenue', 'runtime', 'vote_average', 'vote_count']
+
+    df_movies = pd.read_csv(movie_path)[columns]
+    genres_col = df_movies['genres']
+    df_movies = df_movies.drop(columns=['genres'])
+
+    unique_genres = {}
+    i = 0
+    for genres_str in genres_col:
+        i += 1
+        print(str(i)+'/'+str(len(genres_col)))
+        genres = ast.literal_eval(genres_str)
+        for genre in genres:
+            genre_name = genre['name']
+            try:
+                unique_genres[genre_name] = unique_genres[genre_name] + 1
+            except KeyError:
+                unique_genres[genre_name] = 1
+
+    genres = []
+    for genre in unique_genres.keys():
+        if genre == 'Carousel Productions':
+            break
+        genres += [genre]
+
+    df_genre_split = pd.DataFrame(columns=list(df_movies.columns) + genres)
+
+    print('splitting')
+    for i in range(len(df_movies)):
+        print(str(i+1) + '/' + str(len(genres_col)))
+        row_genres_str = ast.literal_eval(genres_col[i])
+        row_genres = []
+        for genre_str in row_genres_str:
+            row_genres += [genre_str['name']]
+
+        onehot = []
+        for genre in genres:
+            if genre in row_genres:
+                onehot += [1]
+            else:
+                onehot += [0]
+        df_genre_split.loc[i] = list(df_movies.loc[i]) + onehot
+
+    df_genre_split.to_csv(path_out, index=False)
+
+
+def join_movies_users():
+    movie_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\movies_splitted.csv'
+    user_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\ratings_small.csv'
+    path_out = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
+
+    df_movies = pd.read_csv(movie_path).astype({'movieId': 'int32'})
+    df_users = pd.read_csv(user_path)
+    df_joined = df_users.merge(df_movies, on='movieId', how='left').dropna()
+
+    df_joined.to_csv(path_out, index=False)
+
+
+def make_genres_count_column():
+    path_in = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
+    path_out = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\genresCount.csv'
+    genres = ['Animation', 'Comedy', 'Family', 'Adventure', 'Fantasy', 'Romance',
+              'Drama', 'Action', 'Crime', 'Thriller', 'Horror', 'History', 'Science Fiction', 'Mystery', 'War',
+              'Foreign', 'Music', 'Documentary', 'Western', 'TV Movie']
+    df = pd.read_csv(path_in)
+    with open(path_out, 'w', newline='') as file_out:
+        writer = csv.writer(file_out)
+        writer.writerow(['userId', 'genre'])
+        n = len(df)
+        for i in range(n):
+            print(str(i+1)+'/'+str(n))
+            row = df.loc[i]
+            user = row['userId']
+            user_genres = row[genres]
+            for j in range(len(user_genres)):
+                name = user_genres.index[j]
+                count = user_genres[j]
+                if count == 1:
+                    writer.writerow([user, name])
+
+    # counts = df[genres].sum()
+    # users = df['userId']
+    # with open(path_out, 'w', newline='') as file_out:
+    #     writer = csv.writer(file_out)
+    #     writer.writerow(['genres'])
+    #     for i in range(len(counts)):
+    #         name = counts.index[i]
+    #         count = counts[i]
+    #         for j in range(count):
+    #             writer.writerow([name])
+
 # if True:
 #     # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
 #     # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid stat\\hybrid_log.csv'
@@ -834,12 +939,12 @@ if True:
     # results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\matific'
     # results_path = results_dir + '\\averaged_plots.csv'
 
-    log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\merged_log.csv'
-    hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_stat_log.csv'
-    hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_nn_log.csv'
-    L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\L1_log.csv'
-    results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee'
-    results_path = results_dir + '\\averaged_plots.csv'
+    # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\merged_log.csv'
+    # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_stat_log.csv'
+    # hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_nn_log.csv'
+    # L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\L1_log.csv'
+    # results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee'
+    # results_path = results_dir + '\\averaged_plots.csv'
 
     # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\merged\\merged_log.csv'
     # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\merged\\hybrid_stat_log.csv'
@@ -848,5 +953,18 @@ if True:
     # results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee'
     # results_path = results_dir + '\\averaged_plots.csv'
 
-    plots_averaged_over_all_users(10, log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, skip_L_models=True, normalize=False, method='ordered')
+    log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\education\\log.csv'
+    hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\education\\hybrid_log.csv'
+    hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\education\\hybrid_log.csv'
+    results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries'
+
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+
+    plots_averaged_over_all_users(10, log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, log_path,
+                                  normalize=False,
+                                  plot_std=False,
+                                  method='ordered',
+                                  skip_L_models=False,
+                                  only_L1=True)
     # plots_averaged_over_all_users(30, log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, L1_log_path, only_L1=True, normalize=False, method='ordered')
