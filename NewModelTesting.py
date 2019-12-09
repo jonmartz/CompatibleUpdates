@@ -19,13 +19,13 @@ from keras.regularizers import L1L2
 import seaborn as sn
 
 
-class MLP:
+class Neural_Network:
     """
-    Class implementing a Multi Layered Perceptron, capable of training using the log loss + dissonance
+    Class implementing a Neural Network, capable of training using the log loss + dissonance
     to be able to produce compatible updates.
     """
 
-    def __init__(self, X, Y, train_fraction, train_epochs, batch_size, layer_1_neurons, layer_2_neurons, learning_rate=0.02,
+    def __init__(self, X, Y, train_fraction, train_epochs, batch_size, layers, learning_rate=0.02,
                  diss_weight=None, old_model=None, dissonance_type=None, make_h1_subset=True, copy_h1_weights=True,
                  history=None, use_history=False, train_start=0, initial_stdev=1, make_train_similar_to_history=False,
                  model_type='L0', test_model=True, weights_seed=1, regularizer_weight=0.0):
@@ -109,37 +109,43 @@ class MLP:
         y_old_correct = tf.placeholder(tf.float32, [None, labels_dim], name='old_corrects')
 
         # set initial weights
-        if old_model is None or not copy_h1_weights:
-            # if True:
-            w1_initial = tf.truncated_normal([n_features, layer_1_neurons], mean=0,stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)
-            b1_initial = tf.truncated_normal([layer_1_neurons], mean=0, stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)
-            w2_initial = tf.random_normal([layer_1_neurons, layer_2_neurons], mean=0, stddev=initial_stdev, seed=weights_seed)
-            b2_initial = tf.random_normal([layer_2_neurons], mean=0, stddev=initial_stdev, seed=weights_seed)
-            wo_initial = tf.random_normal([layer_2_neurons, labels_dim], mean=0, stddev=initial_stdev, seed=weights_seed)
-            bo_initial = tf.random_normal([labels_dim], mean=0, stddev=initial_stdev, seed=weights_seed)
-        else:
-            w1_initial = tf.convert_to_tensor(old_model.final_W1)
-            b1_initial = tf.convert_to_tensor(old_model.final_b1)
-            w2_initial = tf.convert_to_tensor(old_model.final_W2)
-            b2_initial = tf.convert_to_tensor(old_model.final_b2)
-            wo_initial = tf.convert_to_tensor(old_model.final_Wo)
-            bo_initial = tf.convert_to_tensor(old_model.final_bo)
+        initial_weights = []
+        initial_biases = []
 
-        # first layer
-        W1 = tf.Variable(w1_initial, name='weights1')
-        b1 = tf.Variable(b1_initial, name='biases1')
-        y1 = tf.sigmoid((tf.matmul(x, W1) + b1), name='activationLayer1')
+        for i in range(len(layers)):
+            if old_model is None or not copy_h1_weights:
+                if i == 0:
+                    initial_weights += [tf.truncated_normal([n_features, layers[i]], mean=0,
+                                                    stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)]
+                    initial_biases += [tf.truncated_normal([layers[i]], mean=0,
+                                                   stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)]
+                elif i < len(layers) - 1:
+                    initial_weights += [tf.random_normal([layers[i-1], layers[i]], mean=0, stddev=initial_stdev,
+                                                 seed=weights_seed)]
+                    initial_biases += [tf.random_normal([layers[i]], mean=0, stddev=initial_stdev, seed=weights_seed)]
+                else:
+                    initial_weights += [tf.random_normal([layers[i-1], labels_dim], mean=0, stddev=initial_stdev,
+                                                 seed=weights_seed)]
+                    initial_biases += [tf.random_normal([labels_dim], mean=0, stddev=initial_stdev, seed=weights_seed)]
+            else:
+                initial_weights += [tf.convert_to_tensor(old_model.final_weights[i])]
+                initial_biases += [tf.convert_to_tensor(old_model.final_biases[i])]
 
-        # second layer
-        W2 = tf.Variable(w2_initial, name='weights2')
-        b2 = tf.Variable(b2_initial, name='biases2')
-        y2 = tf.sigmoid((tf.matmul(y1, W2) + b2), name='activationLayer2')
+        # build layers
+        weights = []
+        biases = []
+        activations = []
 
-        # output layer
-        Wo = tf.Variable(wo_initial, name='weightsOut')
-        bo = tf.Variable(bo_initial, name='biasesOut')
-        logits = tf.matmul(y2, Wo) + bo
-        output = tf.nn.sigmoid(logits, name='activationOutputLayer')
+        for i in range(len(layers)):
+            weights += [tf.Variable(initial_weights[i], name='weights_'+str(i+1))]
+            biases += [tf.Variable(initial_biases[i], name='biases_'+str(i+1))]
+            if i == 0:
+                activations += [tf.sigmoid((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
+            elif i < len(layers) - 1:
+                activations += [tf.sigmoid((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
+            else:
+                logits = tf.matmul(activations[i-1], weights[i]) + biases[i]
+                output = tf.nn.sigmoid(logits, name='output')
 
         # for non parametric compatibility
         if model_type in ['L1', 'L2', 'baseline']:
@@ -148,9 +154,14 @@ class MLP:
             hist_y = tf.placeholder(tf.float32, [None, labels_dim], name='hist_labels')
             hist_y_old_correct = tf.placeholder(tf.float32, [None, labels_dim], name='hist_old_corrects')
 
-            hist_y1 = tf.sigmoid((tf.matmul(hist_x, W1) + b1), name='hist_activationLayer1')
-            hist_y2 = tf.sigmoid((tf.matmul(hist_y1, W2) + b2), name='hist_activationLayer2')
-            hist_logits = tf.matmul(hist_y2, Wo) + bo
+            hist_activations = []
+            for i in range(len(layers)):
+                if i == 0:
+                    hist_activations += [tf.sigmoid((tf.matmul(hist_x, weights[i]) + biases[i]), name='hist_activations_'+str(i+1))]
+                elif i < len(layers) - 1:
+                    hist_activations += [tf.sigmoid((tf.matmul(hist_activations[i-1], weights[i]) + biases[i]), name='hist_activations_'+str(i+1))]
+                else:
+                    hist_logits = tf.matmul(hist_activations[i-1], weights[i]) + biases[i]
 
         # model evaluation tensors
         correct_prediction = tf.equal(tf.round(output), y)
@@ -185,10 +196,10 @@ class MLP:
                 else:
                     # if model_type in ['L1', 'L2']:
 
-                        # product = kernels * hist_dissonance
-                        # numerator = tf.reduce_sum(product, axis=1)
-                        # denominator = tf.reduce_sum(kernels, axis=1)
-                        # kernel_likelihood = numerator / denominator
+                    # product = kernels * hist_dissonance
+                    # numerator = tf.reduce_sum(product, axis=1)
+                    # denominator = tf.reduce_sum(kernels, axis=1)
+                    # kernel_likelihood = numerator / denominator
 
                     if model_type == 'L1':
                         hist_dissonance = hist_y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(
@@ -230,7 +241,9 @@ class MLP:
         if regularizer_weight == 0:
             loss = tf.reduce_mean(loss)
         else:
-            regularizer = tf.nn.l2_loss(W1) + tf.nn.l2_loss(W2) + tf.nn.l2_loss(Wo)
+            regularizer = tf.nn.l2_loss(weights[0])
+            for i in range(1, len(layers)):
+                regularizer += tf.nn.l2_loss(weights[i])
             loss = tf.reduce_mean(loss + regularizer_weight * regularizer)
 
         # prepare training
@@ -424,12 +437,11 @@ class MLP:
                     # print("dissonance = "+str(np.sum(diss)))
 
             # save weights
-            self.final_W1 = W1.eval()
-            self.final_b1 = b1.eval()
-            self.final_W2 = W2.eval()
-            self.final_b2 = b2.eval()
-            self.final_Wo = Wo.eval()
-            self.final_bo = bo.eval()
+            self.final_weights = []
+            self.final_biases = []
+            for i in range(len(layers)):
+                self.final_weights += [weights[i].eval()]
+                self.final_biases += [biases[i].eval()]
 
             runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
             print("runtime = " + str(runtime) + " secs\n")
@@ -440,18 +452,17 @@ class MLP:
         :param x: dataset to predict labels of
         :return: numpy array with the probability for each label
         """
-        # _x = tf.cast(x, tf.float32).eval()
-        # _y1 = tf.sigmoid((tf.matmul(_x, self.final_W1) + self.final_b1)).eval()
-        # _y2 = tf.sigmoid((tf.matmul(_y1, self.final_W2) + self.final_b2)).eval()
-        # _logits = (tf.matmul(_y2, self.final_Wo) + self.final_bo).eval()
-        # _out = tf.nn.sigmoid(_logits, name='activationOutputLayer').eval()
-
-        mul1 = np.matmul(x, self.final_W1) + self.final_b1
-        y1 = 1 / (1 + np.exp(-mul1))
-        mul2 = np.matmul(y1, self.final_W2) + self.final_b2
-        y2 = 1 / (1 + np.exp(-mul2))
-        logits = np.matmul(y2, self.final_Wo) + self.final_bo
-        return 1 / (1 + np.exp(-logits))
+        activations = []
+        for i in range(len(self.final_weights)):
+            if i == 0:
+                mul = np.matmul(x, self.final_weights[i]) + self.final_biases[i]
+                activations += [1 / (1 + np.exp(-mul))]
+            elif i < len(self.final_weights) - 1:
+                mul = np.matmul(activations[i-1], self.final_weights[i]) + self.final_biases[i]
+                activations += [1 / (1 + np.exp(-mul))]
+            else:
+                logits = np.matmul(activations[i-1], self.final_weights[i]) + self.final_biases[i]
+                return 1 / (1 + np.exp(-logits))
 
     def test(self, x, y, old_model=None, history=None):
         new_output = self.predict_probabilities(x)
@@ -475,7 +486,7 @@ class MLP:
         # return {'compatibility': compatibility.eval(), 'auc': sklearn.metrics.roc_auc_score(y, new_output)}
         return {'compatibility': compatibility, 'auc': accuracy, 'predicted': predicted}
 
-    def set_hybrid_test(self, history, x, y, method='stat'):
+    def set_hybrid_test(self, history, x, method='stat', layers=None):
 
         x_history = history.instances
         y_history = history.labels
@@ -501,7 +512,7 @@ class MLP:
             # model.fit(x_history, dissonant_y, batch_size=50, epochs=300, verbose=0)
             # self.dissonant_likelihood = model.predict(x)
 
-            model = MLP(x_history, y_dissonant, len(x_history), 200, batch_size, layer_1_size, layer_2_size, weights_seed=1)
+            model = Neural_Network(x_history, y_dissonant, len(x_history), 200, batch_size, layers, weights_seed=1)
             tf.reset_default_graph()
 
             if method == 'nn':
@@ -770,29 +781,28 @@ def plot_confusion_matrix(predicted, true, title, path, plot_confusion=True):
 #
 # plot_confusion = True
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\moviesKaggle"
-# target_col = 'rating'
-# categ_cols = ['original_language']
-# user_group_names = ['userId']
-# history_train_fraction = 0.5
-# h1_train_size = 4000
-# h2_train_size = 5000
-
-full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
-results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries"
-target_col = 'salary'
-# categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-categ_cols = ['workclass', 'education', 'marital-status', 'relationship', 'race', 'sex', 'native-country']
-user_group_names = ['occupation']
+full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
+results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\moviesKaggle"
+target_col = 'rating'
+categ_cols = ['original_language']
+user_group_names = ['userId']
 history_train_fraction = 0.5
-h1_train_size = 50
-h2_train_size = 2000
+h1_train_size = 200
+h2_train_size = 5000
+
+# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
+# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries"
+# target_col = 'salary'
+# # categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# categ_cols = ['workclass', 'education', 'marital-status', 'relationship', 'race', 'sex', 'native-country']
+# user_group_names = ['occupation']
+# history_train_fraction = 0.5
+# h1_train_size = 50
+# h2_train_size = 2000
 
 h1_epochs = 800
 h2_epochs = 200
-layer_1_size = 50
-layer_2_size = 10
+layers = [50, 40, 30, 20, 10, 5]
 batch_size = 128
 
 # # No hist model
@@ -970,7 +980,7 @@ if True:
 
         # h1_train_fractions = [200]
         # for h1_train_fraction in h1_train_fractions:
-        h1 = MLP(X, Y, h1_train_size, h1_epochs, batch_size, layer_1_size, layer_2_size, 0.02, weights_seed=1)
+        h1 = Neural_Network(X, Y, h1_train_size, h1_epochs, batch_size, layers, 0.02, weights_seed=1)
         h1s_by_seed += [h1]
 
         print("training h2s not using history...")
@@ -985,8 +995,8 @@ if True:
             #     h2s_not_using_history += [h2s_not_using_history[0]]
             #     continue
 
-            h2s_not_using_history += [MLP(X, Y, h2_train_size, h2_epochs, batch_size, layer_1_size, layer_2_size, 0.02, diss_weight, h1, 'D', True,
-                                          test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)]
+            h2s_not_using_history += [Neural_Network(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D', True,
+                                                     test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)]
             tf.reset_default_graph()
             first_diss = False
         h2s_not_using_history_by_seed += [h2s_not_using_history]
@@ -1091,7 +1101,7 @@ if True:
 
                 # # print('training baseline model...')
                 # if not only_hybrid:
-                #     h2_baseline = MLP(history_train_x, history_train_y, len(user_train_set), h2_epochs, batch_size, layer_1_size, layer_2_size,
+                #     h2_baseline = MLP(history_train_x, history_train_y, len(user_train_set), h2_epochs, batch_size, layers,
                 #                       weights_seed=2, copy_h1_weights=copy_h1_weights)
             else:
                 history_len = len(user_test_set)
@@ -1155,10 +1165,10 @@ if True:
                         for i in range(weights_count):
                             tf.reset_default_graph()
                             diss_weight = (i + i / (weights_count - 1)) / weights_count
-                            h2_baseline = MLP(X, Y, h2_train_size, h2_epochs, batch_size, layer_1_size,
-                                                   layer_2_size, 0.02, diss_weight, h1, 'D',
-                                                   history=history, use_history=True, model_type='baseline',
-                                                   test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)
+                            h2_baseline = Neural_Network(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
+                                                         diss_weight, h1, 'D', history=history, use_history=True,
+                                                         model_type='baseline', test_model=False,
+                                                         copy_h1_weights=copy_h1_weights, weights_seed=2)
                             result = h2_baseline.test(history_test_x, history_test_y, h1)
                             h2_baseline_x += [result['compatibility']]
                             h2_baseline_y += [result['auc']]
@@ -1177,7 +1187,7 @@ if True:
                     print('hybrid training...')
                     # start_time = int(round(time.time() * 1000))
                     # h2s_not_using_history[0].set_hybrid_test(history, history_test_x, history_test_y)
-                    h2s_not_using_history[0].set_hybrid_test(history, history_test_x, history_test_y, hybrid_method)
+                    h2s_not_using_history[0].set_hybrid_test(history, history_test_x, hybrid_method, layers)
                     # runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
                     # print("runtime = " + str(runtime) + " secs\n")
 
@@ -1232,9 +1242,9 @@ if True:
                             for j in range(len(models)):
                                 tf.reset_default_graph()
                                 model_type = models[j]
-                                h2_using_history = MLP(X, Y, h2_train_size, h2_epochs, batch_size, layer_1_size, layer_2_size, 0.02, diss_weight, h1, 'D',
-                                                       history=history, use_history=True, model_type=model_type, test_model=False,
-                                                       copy_h1_weights=copy_h1_weights, weights_seed=2)
+                                h2_using_history = Neural_Network(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D',
+                                                                  history=history, use_history=True, model_type=model_type, test_model=False,
+                                                                  copy_h1_weights=copy_h1_weights, weights_seed=2)
                                 result = h2_using_history.test(history_test_x, history_test_y, h1)
                                 h2_on_history_x[j] += [result['compatibility']]
                                 h2_on_history_y[j] += [result['auc']]
@@ -1286,7 +1296,7 @@ if True:
 
                             mono_h2_xs += [mono_h2_baseline_x]
                             mono_h2_ys += [mono_h2_baseline_y]
-                            
+
                             if only_L1:
                                 mono_h2_xs += [mono_h2_on_history_L1_x]
                                 mono_h2_ys += [mono_h2_on_history_L1_y]
@@ -1309,7 +1319,7 @@ if True:
 
                         if not only_hybrid:
                             h2_baseline_area = auc([min_x] + mono_h2_baseline_x + [1],
-                                                        [mono_h2_baseline_y[0]] + mono_h2_baseline_y + [h1_acc]) - h1_area
+                                                   [mono_h2_baseline_y[0]] + mono_h2_baseline_y + [h1_acc]) - h1_area
                             h2_on_history_L1_area = auc([min_x] + mono_h2_on_history_L1_x + [1],
                                                         [mono_h2_on_history_L1_y[0]] + mono_h2_on_history_L1_y + [h1_acc]) - h1_area
                             h2_on_history_L0_area = auc([min_x] + mono_h2_on_history_L0_x + [1],
@@ -1361,7 +1371,7 @@ if True:
                             user_id) + '.png')
                     plt.savefig(
                         plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '.png')
-                        # plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '_seed_'+str(seed+1)+'.png')
+                    # plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '_seed_'+str(seed+1)+'.png')
 
                     if plot_confusion:
                         plt.savefig(confusion_dir + '\\plot.png')
