@@ -27,7 +27,8 @@ class NeuralNetwork:
     def __init__(self, X, Y, train_fraction, train_epochs, batch_size, layers, learning_rate=0.02,
                  diss_weight=None, old_model=None, dissonance_type=None, make_h1_subset=True, copy_h1_weights=True,
                  history=None, use_history=False, initial_stdev=1, make_train_similar_to_history=False,
-                 model_type='L0', test_model=True, weights_seed=1, regularization=0.0, plot_train=False):
+                 model_type='L0', test_model=True, weights_seed=1, regularization=0.0, plot_train=False,
+                 normalize_diss_weight=False):
 
         self.old_model = old_model
         self.dissonant_likelihood = None
@@ -89,22 +90,27 @@ class NeuralNetwork:
         initial_weights = []
         initial_biases = []
 
-        for i in range(len(layers)):
-            if old_model is None or not copy_h1_weights:
+        if old_model is None or not copy_h1_weights:
+            for i in range(len(layers)):
                 if i == 0:
                     initial_weights += [tf.truncated_normal([n_features, layers[i]], mean=0,
                                                     stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)]
                     initial_biases += [tf.truncated_normal([layers[i]], mean=0,
                                                    stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)]
-                elif i < len(layers) - 1:
+                else:
                     initial_weights += [tf.random_normal([layers[i-1], layers[i]], mean=0, stddev=initial_stdev,
                                                  seed=weights_seed)]
                     initial_biases += [tf.random_normal([layers[i]], mean=0, stddev=initial_stdev, seed=weights_seed)]
-                else:
-                    initial_weights += [tf.random_normal([layers[i-1], labels_dim], mean=0, stddev=initial_stdev,
-                                                 seed=weights_seed)]
-                    initial_biases += [tf.random_normal([labels_dim], mean=0, stddev=initial_stdev, seed=weights_seed)]
+
+            if len(layers) == 0:
+                last_layer = n_features
             else:
+                last_layer = layers[-1]
+            initial_weights += [tf.random_normal([last_layer, labels_dim], mean=0, stddev=initial_stdev,
+                                         seed=weights_seed)]
+            initial_biases += [tf.random_normal([labels_dim], mean=0, stddev=initial_stdev, seed=weights_seed)]
+        else:
+            for i in range(len(layers)):
                 initial_weights += [tf.convert_to_tensor(old_model.final_weights[i])]
                 initial_biases += [tf.convert_to_tensor(old_model.final_biases[i])]
 
@@ -117,11 +123,17 @@ class NeuralNetwork:
             biases += [tf.Variable(initial_biases[i], name='biases_'+str(i+1))]
             if i == 0:
                 activations += [tf.sigmoid((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
-            elif i < len(layers) - 1:
-                activations += [tf.sigmoid((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
             else:
-                logits = tf.matmul(activations[i-1], weights[i]) + biases[i]
-                output = tf.nn.sigmoid(logits, name='output')
+                activations += [tf.sigmoid((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
+
+        weights += [tf.Variable(initial_weights[-1], name='weights_' + str(len(layers) + 1))]
+        biases += [tf.Variable(initial_biases[-1], name='biases_' + str(len(layers) + 1))]
+
+        if len(layers) == 0:
+            logits = tf.matmul(x, weights[-1]) + biases[-1]
+        else:
+            logits = tf.matmul(activations[-1], weights[-1]) + biases[-1]
+        output = tf.nn.sigmoid(logits, name='output')
 
         # for non parametric compatibility
         if model_type in ['L1', 'L2', 'baseline']:
@@ -134,10 +146,13 @@ class NeuralNetwork:
             for i in range(len(layers)):
                 if i == 0:
                     hist_activations += [tf.sigmoid((tf.matmul(hist_x, weights[i]) + biases[i]), name='hist_activations_'+str(i+1))]
-                elif i < len(layers) - 1:
-                    hist_activations += [tf.sigmoid((tf.matmul(hist_activations[i-1], weights[i]) + biases[i]), name='hist_activations_'+str(i+1))]
                 else:
-                    hist_logits = tf.matmul(hist_activations[i-1], weights[i]) + biases[i]
+                    hist_activations += [tf.sigmoid((tf.matmul(hist_activations[i-1], weights[i]) + biases[i]), name='hist_activations_'+str(i+1))]
+
+            if len(layers) == 0:
+                hist_logits = tf.matmul(hist_x, weights[-1]) + biases[-1]
+            else:
+                hist_logits = tf.matmul(hist_activations[-1], weights[-1]) + biases[-1]
 
         # model evaluation tensors
         correct_prediction = tf.equal(tf.round(output), y)
@@ -145,7 +160,7 @@ class NeuralNetwork:
         y_new_correct = tf.cast(tf.equal(tf.round(output), y), tf.float32)
 
         # loss computation
-        log_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits)
+        log_loss =  tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits))
 
         # dissonance computation
         if old_model is None:
@@ -162,21 +177,18 @@ class NeuralNetwork:
                 raise Exception("invalid dissonance type")
 
             if history is None:
-                loss = (1-diss_weight) * log_loss + diss_weight * dissonance
-                # loss = log_loss + diss_weight * dissonance
+                if normalize_diss_weight:
+                    loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance)
+                else:
+                    loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
                 compatibility = tf.reduce_sum(y_old_correct * y_new_correct) / tf.reduce_sum(y_old_correct)
             else:
                 if not use_history:
-                    loss = (1-diss_weight) * log_loss + diss_weight * dissonance
-                    # loss = log_loss + diss_weight * dissonance
+                    if normalize_diss_weight:
+                        loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance)
+                    else:
+                        loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
                 else:
-                    # if model_type in ['L1', 'L2']:
-
-                    # product = kernels * hist_dissonance
-                    # numerator = tf.reduce_sum(product, axis=1)
-                    # denominator = tf.reduce_sum(kernels, axis=1)
-                    # kernel_likelihood = numerator / denominator
-
                     if model_type == 'L1':
                         hist_dissonance = hist_y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(
                             labels=hist_y,
@@ -184,14 +196,18 @@ class NeuralNetwork:
                             name='hist_dissonance')
                         hist_dissonance = tf.reshape(hist_dissonance, [-1])
                         kernel_likelihood = tf.reduce_sum(kernels * hist_dissonance) / tf.reduce_sum(kernels)
-                        loss = (1-diss_weight) * log_loss + diss_weight * kernel_likelihood
-                        # loss = log_loss + diss_weight * kernel_likelihood
+                        if normalize_diss_weight:
+                            loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(kernel_likelihood)
+                        else:
+                            loss = log_loss + diss_weight * tf.reduce_mean(kernel_likelihood)
 
                     elif model_type == 'L2':
                         # shape = tf.shape(kernels)
                         kernel_likelihood = tf.reduce_sum(kernels, axis=1) / len(history.instances)
-                        loss = (1-diss_weight) * log_loss + diss_weight * kernel_likelihood * dissonance
-                        # loss = log_loss + diss_weight * kernel_likelihood * dissonance
+                        if normalize_diss_weight:
+                            loss = (1-diss_weight) * log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(dissonance)
+                        else:
+                            loss = log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(dissonance)
 
                     elif model_type == 'baseline':
                         hist_loss = hist_y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(
@@ -199,11 +215,16 @@ class NeuralNetwork:
                             logits=hist_logits,
                             name='hist_loss')
                         hist_loss = tf.reshape(hist_loss, [-1])
-                        loss = (1-diss_weight) * log_loss + diss_weight * hist_loss
+                        if normalize_diss_weight:
+                            loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(hist_loss)
+                        else:
+                            loss = log_loss + diss_weight * tf.reduce_mean(hist_loss)
 
                     else:
-                        loss = (1-diss_weight) * log_loss + diss_weight * dissonance * likelihood
-                        # loss = log_loss + diss_weight * dissonance * likelihood
+                        if normalize_diss_weight:
+                            loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
+                        else:
+                            loss = log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
 
                 if model_type in ['L1', 'L2']:
                     compatibility = tf.reduce_sum(
@@ -213,7 +234,7 @@ class NeuralNetwork:
                     compatibility = tf.reduce_sum(y_old_correct * y_new_correct * likelihood) / tf.reduce_sum(
                         y_old_correct * likelihood)
 
-        loss = tf.reduce_mean(loss)
+        # loss = tf.reduce_mean(loss)
 
         if regularization > 0:
             regularizers = tf.nn.l2_loss(weights[0])
@@ -417,7 +438,7 @@ class NeuralNetwork:
             # save weights
             self.final_weights = []
             self.final_biases = []
-            for i in range(len(layers)):
+            for i in range(len(weights)):
                 self.final_weights += [weights[i].eval()]
                 self.final_biases += [biases[i].eval()]
 
@@ -435,12 +456,10 @@ class NeuralNetwork:
             if i == 0:
                 mul = np.matmul(x, self.final_weights[i]) + self.final_biases[i]
                 activations += [1 / (1 + np.exp(-mul))]
-            elif i < len(self.final_weights) - 1:
+            else:
                 mul = np.matmul(activations[i-1], self.final_weights[i]) + self.final_biases[i]
                 activations += [1 / (1 + np.exp(-mul))]
-            else:
-                logits = np.matmul(activations[i-1], self.final_weights[i]) + self.final_biases[i]
-                return 1 / (1 + np.exp(-logits))
+        return activations[-1]
 
     def test(self, x, y, old_model=None, history=None):
         new_output = self.predict_probabilities(x)
@@ -653,71 +672,17 @@ def plot_confusion_matrix(predicted, true, title, path, plot_confusion=True):
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\fraudDetection.csv"
 # target_col = 'isFraud'
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\e-learning\\e-learning_full_encoded.csv'
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\e-learning\\e-learning_full_encoded_with_skill.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\e-learning"
 # target_col = 'correct'
 # categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
 # user_group_names = ['user_id']
-# history_train_fraction = 0.5
-# h1_train_size = 300
-# h2_train_size = 5000
-# h1_epochs = 1000
-# h2_epochs = 200
-# # diss_weights = range(6)
-# # diss_multiply_factor = 0.2  # [0, 1]
-# # diss_weights = range(6, 10)
-# # diss_multiply_factor = 0.2  # [1.2, 1.8]
-# # diss_weights = range(5, 8)
-# # diss_multiply_factor = 0.4  # [2, 2.8]
-# # diss_weights = range(8, 11)
-# # diss_multiply_factor = 0.4  # [3.2, 4]
-# diss_weights = range(11, 13)
-# diss_multiply_factor = 0.4  # [4.4, 4.8]
-# seeds = [0]
-# range_stds = range(-30, 30, 2)
-# hybrid_stds = list((-x/10 for x in range_stds))
-# min_history_size = 200
-# max_history_size = 800
-# current_user_count = 0
-# user_max_count = 32
-# split_by_chronological_order = False
-# only_hybrid = True
-# copy_h1_weights = False
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\matific"
-# target_col = 'is_finished'
-# categ_cols = ['activity_context']
-# user_group_names = ['account_id']
-# history_train_fraction = 0.5
-# h1_train_size = 200
-# h2_train_size = 5000
-# h1_epochs = 200
-# h2_epochs = 200
-# diss_weights = range(6)
-# diss_multiply_factor = 0.2  # [0, 1]
-# seeds = [0]
-# range_stds = range(-30, 30, 2)
-# hybrid_stds = list((-x/10 for x in range_stds))
-# min_history_size = 100
-# max_history_size = 800
-# current_user_count = 0
-# user_max_count = 50
-# split_by_chronological_order = False
-# only_hybrid = True
-# hybrid_method = 'stat'
-# # hybrid_method = 'nn'
-# copy_h1_weights = False
-# df_max_size = 200000
-# skip_cols = []
-# # skip_cols = ['correct_answers_percentage']
-
-full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
-results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
-target_col = 'userResponse'
-categ_cols = ['Currency', 'TypeOfClothing', 'Gender', 'InStock', 'Brand', 'Colour']
-user_group_names = ['userID']
+# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
+# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
+# target_col = 'userResponse'
+# categ_cols = ['Currency', 'TypeOfClothing', 'Gender', 'InStock', 'Brand', 'Colour']
+# user_group_names = ['userID']
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\moviesKaggle"
@@ -731,32 +696,43 @@ user_group_names = ['userID']
 # # categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 # categ_cols = ['workclass', 'education', 'marital-status', 'relationship', 'race', 'sex', 'native-country']
 # user_group_names = ['occupation']
-# history_train_fraction = 0.5
-# h1_train_size = 50
-# h2_train_size = 2000
 
-history_train_fraction = 0.5
-# h1_train_size = 200
-# h2_train_size = int(h1_train_size/0.8)
-h1_epochs = 500
-h2_epochs = 200
-layers = [20, 40, 50, 50, 40, 20]
+full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\abalone\\abalone.csv'
+results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\abalone"
+target_col = 'Rings'
+categ_cols = []
+user_group_names = ['sex']
+
+history_train_fraction = 0.8
+h1_train_size = 50
+h2_train_size = 1000
+test_size = int(h2_train_size * history_train_fraction)
+
+h1_epochs = 1000
+h2_epochs = 100
+# layers = [20, 40, 50, 50, 40, 20]
+layers = [4]
 batch_size = 128
+regularization = 0
 
-# seeds = list(range(10))
-seeds = range(5)
+# seeds = range(5)
+seeds = [0]
 
-# # No hist model
-# diss_weights = range(5)
-# diss_multiply_factor = 0.8  # [0, 3.2]
-#
-# # # L1 model
-# # diss_weights = range(11)
-# # diss_multiply_factor = 0.1  # [0, 1]
+# No hist model
+diss_weights = range(5)
+diss_multiply_factor = 0.5  # [0, 2.0]
 
-count = 5
-diss_weights = [(i + i / (count - 1)) / count for i in range(count)]
-diss_multiply_factor = 1
+# # L1 model
+# diss_weights = range(11)
+# diss_multiply_factor = 0.1  # [0, 1]
+
+normalize_diss_weight = False
+
+# # normalized
+# count = 5
+# diss_weights = [(i + i / (count - 1)) / count for i in range(count)]
+# diss_multiply_factor = 1
+# normalize_diss_weight = True
 
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
@@ -774,13 +750,12 @@ only_L1 = True
 hybrid_method = 'nn'
 
 copy_h1_weights = False
-balance_histories = True
+balance_histories = False
 df_max_size = -1
 skip_cols = []
 
 plot_confusion = False
-cross_validation = True
-regularization = 0
+cross_validation = False
 
 # if only_hybrid:
 #     diss_weights = [0]
@@ -877,10 +852,21 @@ if True:
     tests_group_user_ids = []
 
     if cross_validation:
-        print('using cross validation\n')
+        print('\nusing cross validation\n')
+        train_sizes = [i * 1000 for i in range(1, 11)]
+        h1_epochs = 1000
+        seeds = range(1)
+        num_features = df_train.shape[1]-1
+        # layers = [30, 10]
+        # layers = [int(num_features/2)]
+        layers = []
+    else:
+        train_sizes = [h1_train_size]
 
-    for h1_train_size in [i * 1000 for i in range(7, 11)]:
-        h2_train_size = h1_train_size + 200
+    for h1_train_size in train_sizes:
+
+        if cross_validation:
+            h2_train_size = h1_train_size + 200
 
         train_accuracies = pd.DataFrame()
         test_accuracies = pd.DataFrame()
@@ -902,7 +888,7 @@ if True:
             df_train_subsets_by_seed += [df_train_subset]
 
             # tests_group[str(seed)] = df_train_subset
-            tests_group[str(seed)] = df_test.sample(n=h2_train_size, random_state=seed)
+            tests_group[str(seed)] = df_test.sample(n=test_size, random_state=seed)
             tests_group_user_ids += [str(seed)]
 
             X = df_train_subset.loc[:, df_train_subset.columns != target_col]
@@ -940,52 +926,28 @@ if True:
         plt.clf()
 
         # todo: uncomment
-        # print("training h2s not using history...")
-        #
-        # h2s_not_using_history = []
-        # first_diss = True
-        # for i in diss_weights:
-        #     print('dissonance weight '+str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
-        #     diss_weight = diss_multiply_factor * i
-        #
-        #     # if not first_diss and only_L1:
-        #     #     h2s_not_using_history += [h2s_not_using_history[0]]
-        #     #     continue
-        #
-        #     h2s_not_using_history += [NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D', True,
-        #                                             test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)]
-        #     tf.reset_default_graph()
-        #     first_diss = False
-        # h2s_not_using_history_by_seed += [h2s_not_using_history]
+        print("training h2s not using history...")
+
+        h2s_not_using_history = []
+        first_diss = True
+        for i in diss_weights:
+            print('dissonance weight '+str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
+            diss_weight = diss_multiply_factor * i
+
+            # if not first_diss and only_L1:
+            #     h2s_not_using_history += [h2s_not_using_history[0]]
+            #     continue
+
+            h2s_not_using_history += [NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D', True,
+                                                    test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)]
+            tf.reset_default_graph()
+            first_diss = False
+        h2s_not_using_history_by_seed += [h2s_not_using_history]
 
     user_group_names.insert(0, 'test')
     user_groups_test.insert(0, tests_group)
 
     students_group_user_ids = list(students_group.groups.keys())
-
-    # # get users with highest cos_sim between history train and test sets
-    # students_group_user_ids = []
-    # users_cos_sim = []
-    # cos_sim_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\e-learning\\analysis\\users\\distributions\\all skills\\train_percent_50\\split similarity\\cos_sim_of_sets.csv'
-    # with open(cos_sim_path, 'r', newline='') as file_in:
-    #     reader = csv.reader(file_in)
-    #     next(reader)
-    #     for row in reader:
-    #         students_group_user_ids += [int(row[0])]
-    #         users_cos_sim += [row[1]]
-    # # com_range += [abs(h2s[0].compatibility-h2s[1].compatibility)]
-    # # acc_range += [abs(h2s[0].accuracy-h2s[1].accuracy)]
-    # # h1_train_fractions = [x / h2_train_fraction for x in h1_train_fractions]
-    # # plt.plot(h1_train_fractions, com_range, 'b', label='coms', marker='.')
-    # # plt.plot(h1_train_fractions, acc_range, 'r', label='accs', marker='.')
-    # # plt.xlabel('h1 train size / h2 train size')
-    # # # plt.ylabel('')
-    # # plt.legend(('compatibility range', 'accuracy range'), loc='upper right')
-    # # plt.title('Varying h1 train sizes, where h2 train size = '+str(h2_train_fraction))
-    # # plt.savefig('C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots\\different_h1_train_sizes.png')
-    # # plt.show()
-    # # break
-
     user_groups_user_ids = [tests_group_user_ids, students_group_user_ids]
     user_group_idx = -1
 
@@ -1329,6 +1291,8 @@ if True:
                     plt.savefig(
                         plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '.png')
                     # plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '_seed_'+str(seed)+'.png')
+
+                    plt.show()
 
                     if plot_confusion:
                         plt.savefig(confusion_dir + '\\plot.png')

@@ -635,10 +635,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
         hybrid_nn_y = group_mean['y'].fillna(method='ffill')
 
     elif method == 'ordered':
-        group = groups.get_group('no hist')
-        group_by = group.groupby('position')
-        group_mean = group_by.mean()
-        # group_mean = groups.get_group('no hist').groupby('position').mean()
+        group_mean = groups.get_group('no hist').groupby('position').mean()
         no_hist_x = group_mean['x']
         no_hist_y = group_mean['y']
         if not skip_L_models:
@@ -673,15 +670,16 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
     elif method == 'ordered':
         if not skip_L_models:
-            if not only_L1:
-                min_x = min([min(i) for i in [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
-            else:
-                min_x = min([min(i) for i in [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
 
-            # if not only_L1:
-            #     min_x = min([min(i) for i in [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
-            # else:
-            #     min_x = min([min(i) for i in [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
+        #     if not only_L1:
+        #         min_x = min([min(i) for i in [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
+        #     else:
+        #         min_x = min([min(i) for i in [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
+
+            if not only_L1:
+                min_x = min([min(i) for i in [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
+            else:
+                min_x = min([min(i) for i in [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
         else:
             min_x = min([min(i) for i in [no_hist_x, hybrid_stat_x, hybrid_nn_x]])
         
@@ -702,7 +700,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
     plt.plot(no_hist_x, no_hist_y, 'b', marker='.', label='no hist')
     if not skip_L_models:
-        # plt.plot(baseline_x, baseline_y, 'k', marker='s', label='baseline')
+        plt.plot(baseline_x, baseline_y, 'k', marker='s', label='baseline')
         plt.plot(L1_x, L1_y, 'm', marker='.', label='L1')
         if not only_L1:
             plt.plot(L0_x, L0_y, 'r', marker='.', label='L0')
@@ -712,15 +710,16 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
     colors = ['b', 'g', 'seagreen']
     if not skip_L_models:
-        # if not only_L1:
-        #     colors = ['b', 'k', 'r', 'm', 'orange', 'g', 'seagreen']
-        # else:
-        #     colors = ['b', 'k', 'm', 'g', 'seagreen']
 
         if not only_L1:
-            colors = ['b', 'r', 'm', 'orange', 'g', 'seagreen']
+            colors = ['b', 'k', 'r', 'm', 'orange', 'g', 'seagreen']
         else:
-            colors = ['b', 'm', 'g', 'seagreen']
+            colors = ['b', 'k', 'm', 'g', 'seagreen']
+
+        # if not only_L1:
+        #     colors = ['b', 'r', 'm', 'orange', 'g', 'seagreen']
+        # else:
+        #     colors = ['b', 'm', 'g', 'seagreen']
 
     # area
     if method == 'bins':
@@ -756,19 +755,20 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
     xs = [no_hist_x, hybrid_stat_x, hybrid_nn_x]
     ys = [no_hist_y, hybrid_stat_y, hybrid_nn_y]
     if not skip_L_models:
-        # if not only_L1:
-        #     xs = [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
-        #     ys = [no_hist_y, baseline_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
-        # else:
-        #     xs = [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]
-        #     ys = [no_hist_y, baseline_y, L1_y, hybrid_stat_y, hybrid_nn_y]
 
         if not only_L1:
-            xs = [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
-            ys = [no_hist_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
+            xs = [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
+            ys = [no_hist_y, baseline_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
         else:
-            xs = [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]
-            ys = [no_hist_y, L1_y, hybrid_stat_y, hybrid_nn_y]
+            xs = [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]
+            ys = [no_hist_y, baseline_y, L1_y, hybrid_stat_y, hybrid_nn_y]
+
+        # if not only_L1:
+        #     xs = [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
+        #     ys = [no_hist_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
+        # else:
+        #     xs = [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]
+        #     ys = [no_hist_y, L1_y, hybrid_stat_y, hybrid_nn_y]
 
 
     if plot_area:
@@ -796,7 +796,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
             no_hist_std = get_fixed_std(groups.get_group('no hist'), h1_acc_mean, users_h1_accs)
             if not skip_L_models:
-                # baseline_std = get_fixed_std(groups.get_group('baseline'), h1_acc_mean)
+                baseline_std = get_fixed_std(groups.get_group('baseline'), h1_acc_mean, users_h1_accs)
                 L1_std = get_fixed_std(groups.get_group('L1'), h1_acc_mean, users_h1_accs)
                 if not only_L1:
                     L0_std = get_fixed_std(groups.get_group('L0'), h1_acc_mean, users_h1_accs)
@@ -816,15 +816,17 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
         stds = [no_hist_std, hybrid_stat_std, hybrid_nn_std]
         if not skip_L_models:
-            # if not only_L1:
-            #     stds = [no_hist_std, baseline_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
-            # else:
-            #     stds = [no_hist_std, baseline_std, L1_std, hybrid_stat_std, hybrid_nn_std]
 
             if not only_L1:
-                stds = [no_hist_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
+                stds = [no_hist_std, baseline_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
             else:
-                stds = [no_hist_std, L1_std, hybrid_stat_std, hybrid_nn_std]
+                stds = [no_hist_std, baseline_std, L1_std, hybrid_stat_std, hybrid_nn_std]
+
+            # if not only_L1:
+            #     stds = [no_hist_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
+            # else:
+            #     stds = [no_hist_std, L1_std, hybrid_stat_std, hybrid_nn_std]
+
         for i in range(len(xs)):
             x = xs[i]
             y = ys[i]
@@ -996,12 +998,12 @@ def make_genres_count_column():
 #     # area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_dir, L1_log_path, only_L1=True, cut_by_min=True)
 
 if True:
-    log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
-    L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
-    hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid stat\\hybrid_log.csv'
-    hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid nn\\regularization 0\\hybrid_log.csv'
-    results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\e-learning'
-    results_path = results_dir + '\\averaged_plots.csv'
+    # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
+    # L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
+    # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid stat\\hybrid_log.csv'
+    # hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid nn\\regularization 0\\hybrid_log.csv'
+    # results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\e-learning'
+    # results_path = results_dir + '\\averaged_plots.csv'
 
     # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\matific\\1\\log.csv'
     # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\matific\\1\\hybrid_stat_log.csv'
@@ -1023,10 +1025,12 @@ if True:
     # results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee'
     # results_path = results_dir + '\\averaged_plots.csv'
 
-    # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\education\\log.csv'
-    # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\education\\hybrid_log.csv'
-    # hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\education\\hybrid_log.csv'
-    # results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries'
+    version = 'ocupations\\1'
+    log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\'+version+'\\log.csv'
+    L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\'+version+'\\log.csv'
+    hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\'+version+'\\hybrid_log.csv'
+    hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\salaries\\'+version+'\\hybrid_log.csv'
+    results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'+version
 
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
@@ -1035,5 +1039,4 @@ if True:
                                   normalize=False,
                                   plot_std=True,
                                   skip_L_models=False,
-                                  only_L1=False)
-    # plots_averaged_over_all_users(30, log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, L1_log_path, only_L1=True, normalize=False, method='ordered')
+                                  only_L1=True)
