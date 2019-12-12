@@ -19,16 +19,15 @@ from keras.regularizers import L1L2
 import seaborn as sn
 
 
-class Neural_Network:
+class NeuralNetwork:
     """
     Class implementing a Neural Network, capable of training using the log loss + dissonance
     to be able to produce compatible updates.
     """
-
     def __init__(self, X, Y, train_fraction, train_epochs, batch_size, layers, learning_rate=0.02,
                  diss_weight=None, old_model=None, dissonance_type=None, make_h1_subset=True, copy_h1_weights=True,
-                 history=None, use_history=False, train_start=0, initial_stdev=1, make_train_similar_to_history=False,
-                 model_type='L0', test_model=True, weights_seed=1, regularizer_weight=0.0):
+                 history=None, use_history=False, initial_stdev=1, make_train_similar_to_history=False,
+                 model_type='L0', test_model=True, weights_seed=1, regularization=0.0, plot_train=False):
 
         self.old_model = old_model
         self.dissonant_likelihood = None
@@ -41,35 +40,13 @@ class Neural_Network:
 
         # shuffle indexes to cover train and test sets
         if old_model is None or not make_h1_subset:
-            # shuffled_indexes = np.random.randint(len(X), size=len(X))
             shuffled_indexes = range(len(X))
-            # train_stop = int(len(X) * train_fraction)
             train_stop = train_fraction
             self.train_indexes = shuffled_indexes[:train_stop]
             self.test_indexes = shuffled_indexes[train_stop:]
 
-            # # todo: trying to eliminate randomness here
-            # indexes = range(len(X))
-            # train_size = int(len(X) * train_fraction)
-            # self.train_indexes = indexes[train_start * train_size:(train_start + 1) * train_size]
-
-            # if make_train_similar_to_history:
-            #     similar_indexes = []
-            #     for index in self.train_indexes:
-            #         # if history.likelihood[index] == 0:
-            #         if history.likelihood[index] == 1:
-            #             similar_indexes += [index]
-            #     self.train_indexes = similar_indexes
-
-            # self.test_indexes = [x for x in indexes if x not in self.train_indexes]
-
         else:  # make the old train set to be a subset of the new train set
-            # shuffled = np.random.randint(len(old_model.test_indexes), size=len(old_model.test_indexes))
-            # shuffled_test_indexes = old_model.test_indexes[shuffled]
-
-            # todo: trying to eliminate randomness here
             shuffled_test_indexes = old_model.test_indexes
-            # test_stop = int(len(X) * train_fraction - len(old_model.train_indexes))
             test_stop = train_fraction - len(old_model.train_indexes)
             self.train_indexes = np.concatenate((old_model.train_indexes, shuffled_test_indexes[:test_stop]))
             self.test_indexes = shuffled_test_indexes[test_stop:]
@@ -135,7 +112,6 @@ class Neural_Network:
         weights = []
         biases = []
         activations = []
-
         for i in range(len(layers)):
             weights += [tf.Variable(initial_weights[i], name='weights_'+str(i+1))]
             biases += [tf.Variable(initial_biases[i], name='biases_'+str(i+1))]
@@ -230,7 +206,6 @@ class Neural_Network:
                         # loss = log_loss + diss_weight * dissonance * likelihood
 
                 if model_type in ['L1', 'L2']:
-                    # todo: maybe use average instead of sum?
                     compatibility = tf.reduce_sum(
                         y_old_correct * y_new_correct * tf.reduce_sum(kernels, axis=1)) / tf.reduce_sum(
                         y_old_correct * tf.reduce_sum(kernels, axis=1))
@@ -238,13 +213,13 @@ class Neural_Network:
                     compatibility = tf.reduce_sum(y_old_correct * y_new_correct * likelihood) / tf.reduce_sum(
                         y_old_correct * likelihood)
 
-        if regularizer_weight == 0:
-            loss = tf.reduce_mean(loss)
-        else:
-            regularizer = tf.nn.l2_loss(weights[0])
+        loss = tf.reduce_mean(loss)
+
+        if regularization > 0:
+            regularizers = tf.nn.l2_loss(weights[0])
             for i in range(1, len(layers)):
-                regularizer += tf.nn.l2_loss(weights[i])
-            loss = tf.reduce_mean(loss + regularizer_weight * regularizer)
+                regularizers += tf.nn.l2_loss(weights[i])
+            loss = tf.reduce_mean(loss + regularization * regularizers)
 
         # prepare training
         # train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss) (obsolete)
@@ -264,17 +239,16 @@ class Neural_Network:
                 # print("\nTRAINING h1:\ntrain fraction = " + str(int(100 * train_fraction)) + "%\n")
 
                 plot_x = []
-                plot_losses = []
-                plot_auc = []
-                for epoch in range(train_epochs):
-                    losses = 0
-                    accs = 0
-                    for batch in range(batches + 1):
-                        # shuffled_indexes = np.random.randint(X_train.shape[0], size=batch_size)
-                        # X_batch = X_train[shuffled_indexes]
-                        # Y_batch = Y_train[shuffled_indexes]
+                self.plot_train_losses = []
+                self.plot_train_accuracy = []
+                self.plot_test_losses = []
+                self.plot_test_accuracy = []
 
-                        # todo: trying to eliminate randomness here
+                for epoch in range(train_epochs):
+                    # losses = 0
+                    # accs = 0
+                    for batch in range(batches + 1):
+
                         batch_start = batch * batch_size
                         if batch_start == X_train.shape[0]:
                             continue  # in case the len of train set is a multiple of batch size
@@ -282,32 +256,42 @@ class Neural_Network:
                         X_batch = X_train[batch_start:batch_end]
                         Y_batch = Y_train[batch_start:batch_end]
 
-                        # train the model, and then get the accuracy and loss from model
                         sess.run(train_step, feed_dict={x: X_batch, y: Y_batch})
-                        # acc, lss, out = sess.run([accuracy, loss, output], feed_dict={x: X_batch, y: Y_batch})
-                        # losses = losses + np.sum(lss)
-                        # accs = accs + np.sum(acc)
+
+                    if plot_train:
+                        # print(str(epoch + 1) + "/" + str(train_epochs) + "\tloss = %.4f" %losses +"\tauc = %.4f" % self.acc)
+                        plot_x += [epoch]
+
+                        acc, lss = sess.run([accuracy, loss], feed_dict={x: X_train, y: Y_train})
+                        self.plot_train_losses += [lss]
+                        self.plot_train_accuracy += [acc]
+
+                        acc, lss = sess.run([accuracy, loss], feed_dict={x: X_test, y: Y_test})
+                        self.plot_test_losses += [lss]
+                        self.plot_test_accuracy += [acc]
+
+                # if plot_train:
+                #     # plt.plot(plot_x, plot_train_losses, 'b', label='loss')
+                #     plt.plot(plot_x, plot_train_accuracy, label='train accuracy')
+                #     plt.plot(plot_x, plot_test_accuracy, label='test accuracy')
+                #     plt.xlabel('epoch')
+                #     plt.ylabel('accuracy')
+                #     plt.legend()
+                #     plt.grid()
+                #     runtime = int((round(time.time() * 1000)) - start_time) / 60000
+                #     plt.title('seed='+str(seed)+' train='+str(len(Y_train))+' test='+str(len(Y_test))+
+                #               ' epochs='+str(train_epochs)+' run=%.2f min' % runtime+'\nlayers='+str(layers)
+                #               +' reg='+str(regularization))
+                #     plt.savefig(plots_dir + '\\model_training\\'+'h1_seed_'+str(seed))
+                #     plt.show()
+                #     plt.clf()
 
                 if test_model:
                     acc, lss, out = sess.run([accuracy, loss, output], feed_dict={x: X_test, y: Y_test})
                     # self.auc = sklearn.metrics.roc_auc_score(Y_test, out)
                     self.accuracy = acc
 
-                    # print(str(epoch + 1) + "/" + str(train_epochs) + "\tloss = %.4f" %losses +"\tauc = %.4f" % self.auc)
 
-                    #     plot_x += [epoch]
-                    #     plot_losses += [losses]
-                    #     plot_auc += [ self.auc]
-                    #
-                    # plt.plot(plot_x, plot_losses, 'bs', label='loss')
-                    # plt.plot(plot_x, plot_auc, 'r^', label='auc')
-                    # plt.xlabel('epoch')
-                    # plt.legend(('loss', 'auc'),loc='center left')
-                    # plt.title('Training')
-                    # plt.show()
-                    # plt.clf()
-
-                    # print("test auc = %.4f" % self.auc)
                     print("test acc = %.4f" % self.accuracy)
 
             else:  # with compatibility
@@ -340,13 +324,7 @@ class Neural_Network:
 
                 for epoch in range(train_epochs):
                     for batch in range(batches):
-                        # shuffled_indexes = np.random.randint(X_train.shape[0], size=batch_size)
-                        # X_batch = X_train[shuffled_indexes]
-                        # Y_batch = Y_train[shuffled_indexes]
-                        # Y_batch_old_labels = Y_train_old_labels[shuffled_indexes]
-                        # Y_batch_old_correct = Y_train_old_correct[shuffled_indexes]
 
-                        # todo: trying to eliminate randomness here
                         batch_start = batch * batch_size
                         if batch_start == X_train.shape[0]:
                             continue  # in case the len of train set is a multiple of batch size
@@ -512,7 +490,7 @@ class Neural_Network:
             # model.fit(x_history, dissonant_y, batch_size=50, epochs=300, verbose=0)
             # self.dissonant_likelihood = model.predict(x)
 
-            model = Neural_Network(x_history, y_dissonant, len(x_history), 200, batch_size, layers, weights_seed=1)
+            model = NeuralNetwork(x_history, y_dissonant, len(x_history), 200, batch_size, layers, weights_seed=1)
             tf.reset_default_graph()
 
             if method == 'nn':
@@ -735,60 +713,17 @@ def plot_confusion_matrix(predicted, true, title, path, plot_confusion=True):
 # skip_cols = []
 # # skip_cols = ['correct_answers_percentage']
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
-# target_col = 'userResponse'
-# categ_cols = ['Currency', 'TypeOfClothing', 'Gender', 'InStock', 'Brand', 'Colour']
-# user_group_names = ['userID']
-# history_train_fraction = 0.5
-# h1_train_size = 200
-# h2_train_size = 5000
-#
-# h1_epochs = 200
-# h2_epochs = 10
-# layer_1_size = 50
-# layer_2_size = 10
-# batch_size = 128
-#
-# # No hist model
-# diss_weights = range(5)
-# diss_multiply_factor = 0.2  # [0, 0.8]
-#
-# # # L1 model
-# # diss_weights = range(11)
-# # diss_multiply_factor = 0.1  # [0, 1]
-#
-# seeds = [0]
-# range_stds = range(-30, 30, 2)
-# hybrid_stds = list((-x/10 for x in range_stds))
-#
-# # min_history_size = 400
-# min_history_size = 100
-# max_history_size = 800
-# current_user_count = 0
-# user_max_count = 10
-#
-# split_by_chronological_order = False
-# only_hybrid = True
-# only_L1 = False
-# # hybrid_method = 'stat'
-# hybrid_method = 'nn'
-#
-# copy_h1_weights = False
-# balance_histories = False
-# df_max_size = -1
-# skip_cols = []
-#
-# plot_confusion = True
+full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
+results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
+target_col = 'userResponse'
+categ_cols = ['Currency', 'TypeOfClothing', 'Gender', 'InStock', 'Brand', 'Colour']
+user_group_names = ['userID']
 
-full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
-results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\moviesKaggle"
-target_col = 'rating'
-categ_cols = ['original_language']
-user_group_names = ['userId']
-history_train_fraction = 0.5
-h1_train_size = 200
-h2_train_size = 5000
+# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
+# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\moviesKaggle"
+# target_col = 'rating'
+# categ_cols = ['original_language']
+# user_group_names = ['userId']
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries"
@@ -800,10 +735,16 @@ h2_train_size = 5000
 # h1_train_size = 50
 # h2_train_size = 2000
 
-h1_epochs = 800
+history_train_fraction = 0.5
+# h1_train_size = 200
+# h2_train_size = int(h1_train_size/0.8)
+h1_epochs = 500
 h2_epochs = 200
-layers = [50, 40, 30, 20, 10, 5]
+layers = [20, 40, 50, 50, 40, 20]
 batch_size = 128
+
+# seeds = list(range(10))
+seeds = range(5)
 
 # # No hist model
 # diss_weights = range(5)
@@ -817,7 +758,6 @@ count = 5
 diss_weights = [(i + i / (count - 1)) / count for i in range(count)]
 diss_multiply_factor = 1
 
-seeds = [0]
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
@@ -834,11 +774,13 @@ only_L1 = True
 hybrid_method = 'nn'
 
 copy_h1_weights = False
-balance_histories = False
+balance_histories = True
 df_max_size = -1
 skip_cols = []
 
 plot_confusion = False
+cross_validation = True
+regularization = 0
 
 # if only_hybrid:
 #     diss_weights = [0]
@@ -852,6 +794,7 @@ if True:
     os.makedirs(plots_dir + '\\by_accuracy_range')
     os.makedirs(plots_dir + '\\by_compatibility_range')
     os.makedirs(plots_dir + '\\by_user_id')
+    os.makedirs(plots_dir + '\\model_training')
 
     with open(plots_dir + '\\log.csv', 'w', newline='') as file_out:
         writer = csv.writer(file_out)
@@ -932,74 +875,88 @@ if True:
 
     tests_group = {}
     tests_group_user_ids = []
-    for seed in seeds:
-        print('SETTING TRAIN SEED '+str(seed+1)+'...')
-        df_train_subset = df_train.sample(n=h2_train_size, random_state=seed)
-        df_train_subsets_by_seed += [df_train_subset]
 
-        # tests_group[str(seed + 1)] = df_train_subset
-        tests_group[str(seed + 1)] = df_test.sample(n=h2_train_size, random_state=seed)
-        tests_group_user_ids += [str(seed + 1)]
+    if cross_validation:
+        print('using cross validation\n')
 
-        X = df_train_subset.loc[:, df_train_subset.columns != target_col]
-        Y = df_train_subset[[target_col]]
+    for h1_train_size in [i * 1000 for i in range(7, 11)]:
+        h2_train_size = h1_train_size + 200
 
-        scaler = MinMaxScaler()
-        X = scaler.fit_transform(X, Y)
-        labelizer = LabelBinarizer()
-        Y = labelizer.fit_transform(Y)
+        train_accuracies = pd.DataFrame()
+        test_accuracies = pd.DataFrame()
 
-        Xs_by_seed += [X]
-        Ys_by_seed += [Y]
+        start_time = int(round(time.time() * 1000))
 
-        # history_test_x = X[100:].loc[df['ExternalRiskEstimate'] > 75]
-        # history_test_y = Y[100:].loc[df['ExternalRiskEstimate'] > 75]
+        for seed in seeds:
+            print('SETTING TRAIN SEED '+str(seed)+'...')
+            if not cross_validation:
+                df_train_subset = df_train.sample(n=h2_train_size, random_state=seed)
+            else:
+                df_train_subset = df_train.sample(n=h2_train_size, random_state=0).reset_index(drop=True)
+                test_size = h2_train_size - h1_train_size
+                test_range = range(seed * test_size, (seed + 1) * test_size)
+                train_part = df_train_subset.drop(test_range)
+                test_part = df_train_subset.loc[test_range]
+                df_train_subset = train_part.append(test_part)
 
-        # min max scale and binarize the target labels
-        # X_original = X
-        # history_test_x_original = history_test_x
+            df_train_subsets_by_seed += [df_train_subset]
 
-        # history_test_x = scaler.fit_transform(history_test_x, history_test_y)
-        # history_test_y = label.fit_transform(history_test_y)
+            # tests_group[str(seed)] = df_train_subset
+            tests_group[str(seed)] = df_test.sample(n=h2_train_size, random_state=seed)
+            tests_group_user_ids += [str(seed)]
 
-        # h2_without_history_auc = {}
-        # new_correct = {}
-        # got_without_history = False
+            X = df_train_subset.loc[:, df_train_subset.columns != target_col]
+            Y = df_train_subset[[target_col]]
 
-        # Dissonance types
-        # diss_types = ["D", "D'", "D''"]
-        # diss_types = ["D"]
+            scaler = MinMaxScaler()
+            X = scaler.fit_transform(X, Y)
+            labelizer = LabelBinarizer()
+            Y = labelizer.fit_transform(Y)
 
-        # user_max_count = 10
+            Xs_by_seed += [X]
+            Ys_by_seed += [Y]
 
-        # h1s = []
-
-        # com_range = []
-        # acc_range = []
-        # h1_train_fractions = range(200, h2_train_fraction, 200)
-
-        # h1_train_fractions = [200]
-        # for h1_train_fraction in h1_train_fractions:
-        h1 = Neural_Network(X, Y, h1_train_size, h1_epochs, batch_size, layers, 0.02, weights_seed=1)
-        h1s_by_seed += [h1]
-
-        print("training h2s not using history...")
-
-        h2s_not_using_history = []
-        first_diss = True
-        for i in diss_weights:
-            print('dissonance weight '+str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
-            diss_weight = diss_multiply_factor * i
-
-            # if not first_diss and only_L1:
-            #     h2s_not_using_history += [h2s_not_using_history[0]]
-            #     continue
-
-            h2s_not_using_history += [Neural_Network(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D', True,
-                                                     test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)]
+            h1 = NeuralNetwork(X, Y, h1_train_size, h1_epochs, batch_size, layers, 0.02,
+                               weights_seed=1, plot_train=True, regularization=regularization)
             tf.reset_default_graph()
-            first_diss = False
-        h2s_not_using_history_by_seed += [h2s_not_using_history]
+            h1s_by_seed += [h1]
+
+            train_accuracies[seed] = h1.plot_train_accuracy
+            test_accuracies[seed] = h1.plot_test_accuracy
+
+        plot_x = list(range(h1_epochs))
+        plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
+        plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
+        plt.xlabel('epoch')
+        plt.ylabel('accuracy')
+        plt.legend()
+        plt.grid()
+        runtime = int((round(time.time() * 1000)) - start_time) / 60000
+        plt.title('k-fold='+str(len(seeds))+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
+                  ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
+                  + ' reg=' + str(regularization))
+        plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_' + str(h1_train_size))
+        plt.show()
+        plt.clf()
+
+        # todo: uncomment
+        # print("training h2s not using history...")
+        #
+        # h2s_not_using_history = []
+        # first_diss = True
+        # for i in diss_weights:
+        #     print('dissonance weight '+str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
+        #     diss_weight = diss_multiply_factor * i
+        #
+        #     # if not first_diss and only_L1:
+        #     #     h2s_not_using_history += [h2s_not_using_history[0]]
+        #     #     continue
+        #
+        #     h2s_not_using_history += [NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D', True,
+        #                                             test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)]
+        #     tf.reset_default_graph()
+        #     first_diss = False
+        # h2s_not_using_history_by_seed += [h2s_not_using_history]
 
     user_group_names.insert(0, 'test')
     user_groups_test.insert(0, tests_group)
@@ -1044,9 +1001,10 @@ if True:
         user_train_sets = {}
 
         if user_group_name == 'test':
-            total_users = 1
-            user_ids_in_range = ['1']
-            user_test_sets['1'] = user_group_test['1']
+            for seed in seeds:
+                total_users += 1
+                user_ids_in_range = [str(seed)]
+                user_test_sets[str(seed)] = user_group_test[str(seed)]
         else:
             for user_id in user_ids:
                 try:
@@ -1111,7 +1069,7 @@ if True:
                 if user_group_name == 'test' and seed_idx != user_count-1:
                     continue
                 print(str(user_count) + '/' + str(total_users) + ' ' + user_group_name + ' ' + str(user_id) +
-                      ', instances: ' + str(history_len) + ', seed='+str(seed+1)+'\n')
+                      ', instances: ' + str(history_len) + ', seed='+str(seed)+'\n')
 
                 confusion_dir = plots_dir + '\\confusion_matrixes\\'+user_group_name+'_'+str(user_id)
                 if plot_confusion:
@@ -1165,10 +1123,10 @@ if True:
                         for i in range(weights_count):
                             tf.reset_default_graph()
                             diss_weight = (i + i / (weights_count - 1)) / weights_count
-                            h2_baseline = Neural_Network(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
-                                                         diss_weight, h1, 'D', history=history, use_history=True,
-                                                         model_type='baseline', test_model=False,
-                                                         copy_h1_weights=copy_h1_weights, weights_seed=2)
+                            h2_baseline = NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
+                                                        diss_weight, h1, 'D', history=history, use_history=True,
+                                                        model_type='baseline', test_model=False,
+                                                        copy_h1_weights=copy_h1_weights, weights_seed=2)
                             result = h2_baseline.test(history_test_x, history_test_y, h1)
                             h2_baseline_x += [result['compatibility']]
                             h2_baseline_y += [result['auc']]
@@ -1242,9 +1200,9 @@ if True:
                             for j in range(len(models)):
                                 tf.reset_default_graph()
                                 model_type = models[j]
-                                h2_using_history = Neural_Network(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D',
-                                                                  history=history, use_history=True, model_type=model_type, test_model=False,
-                                                                  copy_h1_weights=copy_h1_weights, weights_seed=2)
+                                h2_using_history = NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D',
+                                                                 history=history, use_history=True, model_type=model_type, test_model=False,
+                                                                 copy_h1_weights=copy_h1_weights, weights_seed=2)
                                 result = h2_using_history.test(history_test_x, history_test_y, h1)
                                 h2_on_history_x[j] += [result['compatibility']]
                                 h2_on_history_y[j] += [result['auc']]
@@ -1357,8 +1315,7 @@ if True:
 
                     plt.title(
                         'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' + str(
-                            100 * history_train_fraction) + ' seed=' + str(
-                            seed + 1))
+                            100 * history_train_fraction) + ' seed=' + str(seed))
 
                     plt.savefig(
                         plots_dir + '\\by_hist_length\\len_' + str(history_len) + '_' + user_group_name + '_' + str(
@@ -1371,7 +1328,7 @@ if True:
                             user_id) + '.png')
                     plt.savefig(
                         plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '.png')
-                    # plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '_seed_'+str(seed+1)+'.png')
+                    # plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '_seed_'+str(seed)+'.png')
 
                     if plot_confusion:
                         plt.savefig(confusion_dir + '\\plot.png')
@@ -1385,7 +1342,7 @@ if True:
                                     str(history_train_fraction),
                                     str(user_id),
                                     str(history_len),
-                                    str(seed + 1),
+                                    str(seed),
                                     str(com_range),
                                     str(auc_range),
                                     str(h1_acc),
@@ -1406,7 +1363,7 @@ if True:
                                     str(history_train_fraction),
                                     str(user_id),
                                     str(history_len),
-                                    str(seed + 1),
+                                    str(seed),
                                     str(com_range),
                                     str(auc_range),
                                     str(h1_acc),
@@ -1432,7 +1389,7 @@ if True:
                                 str(user_id),
                                 str(history_len),
                                 # str(users_cos_sim[user_idx]),
-                                str(seed + 1),
+                                str(seed),
                                 str(hybrid_stds[i]),
                                 str(h2_on_history_hybrid_x[i]),
                                 str(h2_on_history_hybrid_y[i])
@@ -1446,7 +1403,7 @@ if True:
                             str(user_id),
                             str(history_len),
                             # str(users_cos_sim[user_idx]),
-                            str(seed + 1),
+                            str(seed),
                             str(com_range),
                             str(auc_range),
                             str(h1_acc),
