@@ -1,6 +1,7 @@
 import csv
 import os.path
 import shutil
+import sys
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -160,7 +161,8 @@ class NeuralNetwork:
         y_new_correct = tf.cast(tf.equal(tf.round(output), y), tf.float32)
 
         # loss computation
-        log_loss =  tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits))
+        log_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits)
+        # log_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits))
 
         # dissonance computation
         if old_model is None:
@@ -180,51 +182,56 @@ class NeuralNetwork:
                 if normalize_diss_weight:
                     loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance)
                 else:
-                    loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
+                    loss = log_loss + diss_weight * dissonance
+                    # loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
                 compatibility = tf.reduce_sum(y_old_correct * y_new_correct) / tf.reduce_sum(y_old_correct)
             else:
                 if not use_history:
                     if normalize_diss_weight:
                         loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance)
                     else:
-                        loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
+                        loss = log_loss + diss_weight * dissonance
+                        # loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
                 else:
-                    if model_type == 'L1':
+                    if model_type == 'L2':
+                        # shape = tf.shape(kernels)
+                        kernel_likelihood = tf.reduce_sum(kernels, axis=1) / len(history.instances)
+                        if normalize_diss_weight:
+                            loss = (1 - diss_weight) * log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(
+                                dissonance)
+                        else:
+                            loss = log_loss + diss_weight * kernel_likelihood * dissonance
+                            # loss = log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(dissonance)
+
+                    elif model_type == 'L1' or model_type == 'baseline':
                         hist_dissonance = hist_y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(
                             labels=hist_y,
                             logits=hist_logits,
                             name='hist_dissonance')
                         hist_dissonance = tf.reshape(hist_dissonance, [-1])
-                        kernel_likelihood = tf.reduce_sum(kernels * hist_dissonance) / tf.reduce_sum(kernels)
-                        if normalize_diss_weight:
-                            loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(kernel_likelihood)
-                        else:
-                            loss = log_loss + diss_weight * tf.reduce_mean(kernel_likelihood)
+                        reduced_diss_weight = diss_weight / 1
 
-                    elif model_type == 'L2':
-                        # shape = tf.shape(kernels)
-                        kernel_likelihood = tf.reduce_sum(kernels, axis=1) / len(history.instances)
-                        if normalize_diss_weight:
-                            loss = (1-diss_weight) * log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(dissonance)
-                        else:
-                            loss = log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(dissonance)
+                        if model_type == 'L1':
+                            kernel_likelihood = tf.reduce_sum(kernels * hist_dissonance) / tf.reduce_sum(kernels)
+                            if normalize_diss_weight:
+                                loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(kernel_likelihood)
+                            else:
+                                loss = log_loss + reduced_diss_weight * kernel_likelihood
+                                # loss = log_loss + reduced_diss_weight * tf.reduce_mean(kernel_likelihood)
 
-                    elif model_type == 'baseline':
-                        hist_loss = hist_y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(
-                            labels=hist_y,
-                            logits=hist_logits,
-                            name='hist_loss')
-                        hist_loss = tf.reshape(hist_loss, [-1])
-                        if normalize_diss_weight:
-                            loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(hist_loss)
-                        else:
-                            loss = log_loss + diss_weight * tf.reduce_mean(hist_loss)
+                        else:  # baseline
+                            if normalize_diss_weight:
+                                loss = (1 - diss_weight) * log_loss + diss_weight * tf.reduce_mean(hist_dissonance)
+                            else:
+                                loss = log_loss + reduced_diss_weight * hist_dissonance
+                                # loss = log_loss + reduced_diss_weight * tf.reduce_mean(hist_dissonance)
 
-                    else:
+                    else:  # L0
                         if normalize_diss_weight:
                             loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
                         else:
-                            loss = log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
+                            loss = log_loss + diss_weight * dissonance * likelihood
+                            # loss = log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
 
                 if model_type in ['L1', 'L2']:
                     compatibility = tf.reduce_sum(
@@ -238,7 +245,7 @@ class NeuralNetwork:
 
         if regularization > 0:
             regularizers = tf.nn.l2_loss(weights[0])
-            for i in range(1, len(layers)):
+            for i in range(1, len(weights)):
                 regularizers += tf.nn.l2_loss(weights[i])
             loss = tf.reduce_mean(loss + regularization * regularizers)
 
@@ -266,6 +273,9 @@ class NeuralNetwork:
                 self.plot_test_accuracy = []
 
                 for epoch in range(train_epochs):
+                    # if epoch % 10 == 0:
+                    #     sys.stdout.write("epoch %d/%d\r" % (epoch+1, train_epochs))
+                    #     sys.stdout.flush()
                     # losses = 0
                     # accs = 0
                     for batch in range(batches + 1):
@@ -339,13 +349,15 @@ class NeuralNetwork:
 
                 if model_type in ['L1', 'L2', 'baseline']:
                     hist_Y_old_probabilities = old_model.predict_probabilities(history.instances)
-                    # hist_Y_old_probabilities = tf.nn.sigmoid(hist_Y_old_logits, name='hist_probabilities').eval()
                     hist_Y_old_labels = tf.round(hist_Y_old_probabilities).eval()
                     hist_Y_old_correct = tf.cast(tf.equal(hist_Y_old_labels, history.labels), tf.float32).eval()
 
                 for epoch in range(train_epochs):
-                    for batch in range(batches):
+                    # if epoch % 10 == 0:
+                    #     sys.stdout.write("epoch %d/%d\r" % (epoch + 1, train_epochs))
+                    #     sys.stdout.flush()
 
+                    for batch in range(batches):
                         batch_start = batch * batch_size
                         if batch_start == X_train.shape[0]:
                             continue  # in case the len of train set is a multiple of batch size
@@ -672,109 +684,120 @@ def plot_confusion_matrix(predicted, true, title, path, plot_confusion=True):
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\fraudDetection.csv"
 # target_col = 'isFraud'
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\e-learning\\e-learning_full_encoded_with_skill.csv'
+# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\e-learning\\e-learning.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\e-learning"
 # target_col = 'correct'
 # categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
 # user_group_names = ['user_id']
+# skip_cols = []
+# df_max_size = 100000
+# layers = [100]
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
 # target_col = 'userResponse'
 # categ_cols = ['Currency', 'TypeOfClothing', 'Gender', 'InStock', 'Brand', 'Colour']
 # user_group_names = ['userID']
+# skip_cols = []
+# df_max_size = -1
+# layers = []
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\moviesKaggle.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\moviesKaggle"
 # target_col = 'rating'
 # categ_cols = ['original_language']
 # user_group_names = ['userId']
+# skip_cols = []
+# # skip_cols = ['Animation', 'Comedy', 'Family', 'Adventure', 'Fantasy', 'Romance', 'Drama', 'Action', 'Crime', 'Thriller',
+# #              'Horror', 'History', 'Science Fiction', 'Mystery', 'War', 'Foreign', 'Music', 'Documentary', 'Western', 'TV Movie']
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries"
-# target_col = 'salary'
-# # categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-# categ_cols = ['workclass', 'education', 'marital-status', 'relationship', 'race', 'sex', 'native-country']
-# user_group_names = ['occupation']
+full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
+results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries"
+target_col = 'salary'
+original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+skip_cols = []
+df_max_size = -1
+layers = []
 
-full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\abalone\\abalone.csv'
-results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\abalone"
-target_col = 'Rings'
-categ_cols = []
-user_group_names = ['sex']
+# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\abalone\\abalone.csv'
+# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\abalone"
+# target_col = 'Rings'
+# categ_cols = []
+# user_group_names = ['sex']
 
-history_train_fraction = 0.8
-h1_train_size = 50
-h2_train_size = 1000
+# selecting experiment parameters
+history_train_fraction = 0.5
+h1_train_size = 200
+h2_train_size = 5000
 test_size = int(h2_train_size * history_train_fraction)
 
-h1_epochs = 1000
-h2_epochs = 100
-# layers = [20, 40, 50, 50, 40, 20]
-layers = [4]
+h1_epochs = 500
+h2_epochs = 200
+
 batch_size = 128
 regularization = 0
 
 # seeds = range(5)
 seeds = [0]
 
-# No hist model
-diss_weights = range(5)
-diss_multiply_factor = 0.5  # [0, 2.0]
+diss_count = 5
+normalize_diss_weight = True
+if normalize_diss_weight:
+    diss_weights = [(i + i / (diss_count - 1)) / diss_count for i in range(diss_count)]
+    diss_multiply_factor = 1
+else:
+    diss_weights = range(diss_count)
+    diss_multiply_factor = 1.0  # [0, 4]
 
-# # L1 model
-# diss_weights = range(11)
-# diss_multiply_factor = 0.1  # [0, 1]
-
-normalize_diss_weight = False
-
-# # normalized
-# count = 5
-# diss_weights = [(i + i / (count - 1)) / count for i in range(count)]
-# diss_multiply_factor = 1
-# normalize_diss_weight = True
 
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
-# min_history_size = 400
-min_history_size = 200
-max_history_size = 10000
+min_history_size = 0
+max_history_size = 1000000000
 current_user_count = 0
-user_max_count = 15
+user_max_count = 30
 
-split_by_chronological_order = False
-only_hybrid = False
 only_L1 = True
+only_hybrid = False
 # hybrid_method = 'stat'
 hybrid_method = 'nn'
 
+split_by_chronological_order = False
 copy_h1_weights = False
-balance_histories = False
-df_max_size = -1
-skip_cols = []
-
+balance_histories = True
 plot_confusion = False
-cross_validation = False
+
+only_train_h1 = False
 
 # if only_hybrid:
 #     diss_weights = [0]
 
-if True:
+# if True:
+for categ in original_categ_cols:
+    if categ not in ['relationship']:
+        continue
+    user_group_names = [categ]
+    categ_cols = original_categ_cols.copy()
+    categ_cols.remove(categ)
 
-    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots'
+    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots\\'+categ
     if os.path.exists(plots_dir):
         shutil.rmtree(plots_dir)
-    os.makedirs(plots_dir + '\\by_hist_length')
-    os.makedirs(plots_dir + '\\by_accuracy_range')
-    os.makedirs(plots_dir + '\\by_compatibility_range')
+    else:
+        os.makedirs(plots_dir)
+    # os.makedirs(plots_dir + '\\by_hist_length')
+    # os.makedirs(plots_dir + '\\by_accuracy_range')
+    # os.makedirs(plots_dir + '\\by_compatibility_range')
     os.makedirs(plots_dir + '\\by_user_id')
     os.makedirs(plots_dir + '\\model_training')
 
     with open(plots_dir + '\\log.csv', 'w', newline='') as file_out:
         writer = csv.writer(file_out)
         header = ['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc',
+                  # 'h1 hist acc',
                   'baseline x', 'baseline y', 'diss weight', 'no hist x', 'no hist y',
+                  # 'h2 hist x', 'h2 hist y',
                   'L0 x', 'L0 y', 'L1 x', 'L1 y', 'L2 x', 'L2 y']
         writer.writerow(header)
 
@@ -783,13 +806,13 @@ if True:
         header = ['train frac', 'user_id', 'instances', 'train seed', 'std offset', 'hybrid x', 'hybrid y']
         writer.writerow(header)
 
-    with open(plots_dir + '\\auc.csv', 'w', newline='') as file_out:
-        writer = csv.writer(file_out)
-        # header = ['train frac', 'user_id', 'instances', 'cos sim', 'train seed', 'comp range', 'acc range', 'h1 acc',
-        #           'no hist area', 'hybrid area', 'L0 area', 'L1 area', 'L2 area']
-        header = ['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc',
-                  'no hist area', 'hybrid area', 'L0 area', 'L1 area', 'L2 area']
-        writer.writerow(header)
+    # with open(plots_dir + '\\auc.csv', 'w', newline='') as file_out:
+    #     writer = csv.writer(file_out)
+    #     # header = ['train frac', 'user_id', 'instances', 'cos sim', 'train seed', 'comp range', 'acc range', 'h1 acc',
+    #     #           'no hist area', 'hybrid area', 'L0 area', 'L1 area', 'L2 area']
+    #     header = ['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc',
+    #               'no hist area', 'hybrid area', 'L0 area', 'L1 area', 'L2 area']
+    #     writer.writerow(header)
 
     print('loading data...')
     df_full = pd.read_csv(full_dataset_path)
@@ -807,6 +830,7 @@ if True:
     ohe = ce.OneHotEncoder(cols=categ_cols, use_cat_names=True)
     df_full = ohe.fit_transform(df_full)
     # df_balanced = ohe.transform(df_balanced)
+    print('num columns = %d'%df_full.shape[1])
 
     print('splitting into train and test sets...')
 
@@ -830,13 +854,20 @@ if True:
     del df_train[user_group_names[0]]
     del df_test[user_group_names[0]]
 
+    del df_full
+
     # balance sets
     print('balancing train set...')
-    if balance_histories:  # to make the general test be consistent with the histories
 
-        target_group = df_train.groupby(target_col)
-        df_train = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
-        df_train = df_train.reset_index(drop=True)
+    target_group = df_train.groupby(target_col)
+    df_train = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
+    df_train = df_train.reset_index(drop=True)
+
+    if balance_histories:
+
+        # target_group = df_train.groupby(target_col)
+        # df_train = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
+        # df_train = df_train.reset_index(drop=True)
 
         target_group = df_test.groupby(target_col)
         df_test = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
@@ -851,21 +882,24 @@ if True:
     tests_group = {}
     tests_group_user_ids = []
 
-    if cross_validation:
+    if only_train_h1:
         print('\nusing cross validation\n')
-        train_sizes = [i * 1000 for i in range(1, 11)]
-        h1_epochs = 1000
+        train_sizes = [200, 5000]
+        # train_sizes = [i * 100 for i in range(2, 11)]
+        h1_epochs = 600
         seeds = range(1)
-        num_features = df_train.shape[1]-1
-        # layers = [30, 10]
-        # layers = [int(num_features/2)]
+        n_features = int(df_train.shape[1])-1
         layers = []
+        # layers = [int(n_features/2)]
+        # layers = [90, 40]
+        regularization = 0
+        bottom, top = 0.4, 1.02
     else:
         train_sizes = [h1_train_size]
 
     for h1_train_size in train_sizes:
 
-        if cross_validation:
+        if only_train_h1:
             h2_train_size = h1_train_size + 200
 
         train_accuracies = pd.DataFrame()
@@ -875,12 +909,14 @@ if True:
 
         for seed in seeds:
             print('SETTING TRAIN SEED '+str(seed)+'...')
-            if not cross_validation:
+            if not only_train_h1:
                 df_train_subset = df_train.sample(n=h2_train_size, random_state=seed)
             else:
-                df_train_subset = df_train.sample(n=h2_train_size, random_state=0).reset_index(drop=True)
+                df_train_subset = df_train.sample(n=h2_train_size, random_state=seed).reset_index(drop=True)
+                # df_train_subset = df_train.sample(n=h2_train_size, random_state=0).reset_index(drop=True)
                 test_size = h2_train_size - h1_train_size
-                test_range = range(seed * test_size, (seed + 1) * test_size)
+                test_range = range(test_size)
+                # test_range = range(seed * test_size, (seed + 1) * test_size)
                 train_part = df_train_subset.drop(test_range)
                 test_part = df_train_subset.loc[test_range]
                 df_train_subset = train_part.append(test_part)
@@ -917,32 +953,42 @@ if True:
         plt.ylabel('accuracy')
         plt.legend()
         plt.grid()
+        if only_train_h1:
+            plt.ylim(bottom, top)
         runtime = int((round(time.time() * 1000)) - start_time) / 60000
-        plt.title('k-fold='+str(len(seeds))+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
+        plt.title('k-folds='+str(len(seeds))+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
                   ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
                   + ' reg=' + str(regularization))
         plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_' + str(h1_train_size))
         plt.show()
         plt.clf()
 
-        # todo: uncomment
-        print("training h2s not using history...")
+        if not only_train_h1:
 
-        h2s_not_using_history = []
-        first_diss = True
-        for i in diss_weights:
-            print('dissonance weight '+str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
-            diss_weight = diss_multiply_factor * i
+            print("training h2s not using history...")
+            h2s_not_using_history = []
+            first_diss = True
+            for i in diss_weights:
+                print('dissonance weight '+str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
+                diss_weight = diss_multiply_factor * i
 
-            # if not first_diss and only_L1:
-            #     h2s_not_using_history += [h2s_not_using_history[0]]
-            #     continue
+                # if not first_diss and only_L1:
+                #     h2s_not_using_history += [h2s_not_using_history[0]]
+                #     continue
 
-            h2s_not_using_history += [NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D', True,
-                                                    test_model=False, copy_h1_weights=copy_h1_weights, weights_seed=2)]
-            tf.reset_default_graph()
-            first_diss = False
-        h2s_not_using_history_by_seed += [h2s_not_using_history]
+                h2s_not_using_history += [NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
+                                                        diss_weight, h1, 'D', make_h1_subset=False, test_model=False,
+                                                        copy_h1_weights=copy_h1_weights, weights_seed=2,
+                                                        normalize_diss_weight=normalize_diss_weight)]
+                tf.reset_default_graph()
+                first_diss = False
+            h2s_not_using_history_by_seed += [h2s_not_using_history]
+
+    if only_train_h1:
+        exit()
+
+    del df_train
+    del df_test
 
     user_group_names.insert(0, 'test')
     user_groups_test.insert(0, tests_group)
@@ -973,7 +1019,7 @@ if True:
                     user_test_set = user_group_test.get_group(user_id)
                     user_train_set = user_groups_train[user_group_idx - 1].get_group(user_id)
                 except KeyError:
-                    pass
+                    continue
 
                 if balance_histories:
                     target_group = user_test_set.groupby(target_col)
@@ -1043,13 +1089,14 @@ if True:
                 h1 = h1s_by_seed[seed_idx]
                 h2s_not_using_history = h2s_not_using_history_by_seed[seed_idx]
 
+                # test h1 on user
                 result = h1.test(history_test_x, history_test_y)
                 h1_acc = result['auc']
-
                 plot_confusion_matrix(result['predicted'], history_test_y,
                                       user_group_name +'=' + str(user_id) +' h1 y='+'%.2f' % (h1_acc),
                                       confusion_dir + '\\h1.png', plot_confusion)
 
+                # test h2 on user
                 h2_on_history_not_using_history_x = []
                 h2_on_history_not_using_history_y = []
                 for i in range(len(h2s_not_using_history)):
@@ -1071,6 +1118,48 @@ if True:
 
                 if user_group_name != 'test':
 
+                    # print('training on history h1 and h2...')
+                    #
+                    # # train h1 on history
+                    # h1_hist = NeuralNetwork(history_train_x, history_train_y, len(history_train_x), h1_epochs,
+                    #                         batch_size, layers, 0.02,
+                    #                         weights_seed=1, regularization=regularization,
+                    #                         test_model=False)
+                    # tf.reset_default_graph()
+                    # h1_hist.test_indexes = range(len(history_train_x), h2_train_size)
+                    # result = h1_hist.test(history_test_x, history_test_y)
+                    # h1_hist_acc = result['auc']
+                    # plot_confusion_matrix(result['predicted'], history_test_y,
+                    #                       user_group_name + '=' + str(user_id) + ' h1_hist y=' + '%.2f' % (h1_hist_acc),
+                    #                       confusion_dir + '\\h1_hist.png', plot_confusion)
+                    #
+                    # # train and test h2_hist on user
+                    # h2_on_history_using_history_x = []
+                    # h2_on_history_using_history_y = []
+                    # for i in range(len(diss_weights)):
+                    #     diss_weight = diss_multiply_factor * diss_weights[i]
+                    #     print('dissonance weight ' + str(i + 1) + "/" + str(len(diss_weights)))
+                    #     h2_hist = NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight,
+                    #                             h1_hist, 'D', test_model=False, copy_h1_weights=copy_h1_weights,
+                    #                             weights_seed=2, make_h1_subset=False, normalize_diss_weight=normalize_diss_weight)
+                    #     tf.reset_default_graph()
+                    #     result = h2_hist.test(history_test_x, history_test_y, h1_hist)
+                    #     # result = h2_hist.test(history_test_x, history_test_y, h1)
+                    #     h2_on_history_using_history_x += [result['compatibility']]
+                    #     h2_on_history_using_history_y += [result['auc']]
+                    #
+                    #     diss_str = '%.2f' % (diss_weight)
+                    #     plot_confusion_matrix(result['predicted'], history_test_y,
+                    #                           user_group_name + '=' + str(user_id) +
+                    #                           ' h2=h2_hist x=' + '%.2f' % (result['compatibility']) + ' y=' + '%.2f' % (
+                    #                               result['auc']),
+                    #                           confusion_dir + '\\h2_hist_' + str(i) + '.png', plot_confusion)
+                    #
+                    # min_x = min(min_x, min(h2_on_history_using_history_x))
+                    # max_x = max(max_x, max(h2_on_history_using_history_x))
+                    # min_y = min(min_y, min(h2_on_history_using_history_y))
+                    # max_y = max(max_y, max(h2_on_history_using_history_y))
+
                     if not only_hybrid:
 
                         if not only_L1:
@@ -1088,7 +1177,8 @@ if True:
                             h2_baseline = NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
                                                         diss_weight, h1, 'D', history=history, use_history=True,
                                                         model_type='baseline', test_model=False,
-                                                        copy_h1_weights=copy_h1_weights, weights_seed=2)
+                                                        copy_h1_weights=copy_h1_weights, weights_seed=2,
+                                                        normalize_diss_weight=normalize_diss_weight)
                             result = h2_baseline.test(history_test_x, history_test_y, h1)
                             h2_baseline_x += [result['compatibility']]
                             h2_baseline_y += [result['auc']]
@@ -1096,7 +1186,7 @@ if True:
                             plot_confusion_matrix(result['predicted'], history_test_y,
                                                   user_group_name + '=' + str(user_id) +
                                                   ' baseline x='+'%.2f' % (result['compatibility']) +' y='+'%.2f' % (result['auc']),
-                                                  confusion_dir + '\\baseline.png', plot_confusion)
+                                                  confusion_dir + '\\baseline_'+str(i)+'.png', plot_confusion)
 
                         min_x = min(min_x, min(h2_baseline_x))
                         max_x = max(max_x, max(h2_baseline_x))
@@ -1164,7 +1254,8 @@ if True:
                                 model_type = models[j]
                                 h2_using_history = NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, diss_weight, h1, 'D',
                                                                  history=history, use_history=True, model_type=model_type, test_model=False,
-                                                                 copy_h1_weights=copy_h1_weights, weights_seed=2)
+                                                                 copy_h1_weights=copy_h1_weights, weights_seed=2,
+                                                                 normalize_diss_weight=normalize_diss_weight)
                                 result = h2_using_history.test(history_test_x, history_test_y, h1)
                                 h2_on_history_x[j] += [result['compatibility']]
                                 h2_on_history_y[j] += [result['auc']]
@@ -1175,8 +1266,6 @@ if True:
                                                       ' x='+'%.2f' % (result['compatibility']) +' y='+'%.2f' % (result['auc']),
                                                       confusion_dir + '\\'+model_type+'_' + str(i) + '.png', plot_confusion)
 
-                        # PLOT
-                        # all hist approaches and no hist plot
                         for model in h2_on_history_x:
                             min_model = min(model)
                             if min_x > min_model:
@@ -1195,13 +1284,17 @@ if True:
                     get_area = True
                     if get_area:
                         mono_h2_on_history_not_using_history_x = h2_on_history_not_using_history_x.copy()
-                        mono_h2_on_history_hybrid_x = h2_on_history_hybrid_x.copy()
                         mono_h2_on_history_not_using_history_y = h2_on_history_not_using_history_y.copy()
+                        # mono_h2_on_history_using_history_x = h2_on_history_using_history_x.copy()
+                        # mono_h2_on_history_using_history_y = h2_on_history_using_history_y.copy()
+                        mono_h2_on_history_hybrid_x = h2_on_history_hybrid_x.copy()
                         mono_h2_on_history_hybrid_y = h2_on_history_hybrid_y.copy()
 
                         mono_h2_xs = [mono_h2_on_history_not_using_history_x,
+                                      # mono_h2_on_history_using_history_x,
                                       mono_h2_on_history_hybrid_x]
                         mono_h2_ys = [mono_h2_on_history_not_using_history_y,
+                                      # mono_h2_on_history_using_history_y,
                                       mono_h2_on_history_hybrid_y]
 
                         if not only_hybrid:
@@ -1234,6 +1327,8 @@ if True:
                         h1_area = (1-min_x)*h1_acc
                         h2_on_history_not_using_history_area = auc([min_x] + mono_h2_on_history_not_using_history_x + [1],
                                                                    [mono_h2_on_history_not_using_history_y[0]] + mono_h2_on_history_not_using_history_y + [h1_acc]) - h1_area
+                        # h2_on_history_using_history_area = auc([min_x] + mono_h2_on_history_using_history_x + [1],
+                        #                                        [mono_h2_on_history_using_history_y[0]] + mono_h2_on_history_using_history_y + [h1_acc]) - h1_area
                         h2_on_history_hybrid_area = auc([min_x] + mono_h2_on_history_hybrid_x + [1],
                                                         [mono_h2_on_history_hybrid_y[0]] + mono_h2_on_history_hybrid_y + [h1_acc]) - h1_area
 
@@ -1252,10 +1347,12 @@ if True:
 
                     h1_x = [min_x, max_x]
                     h1_y = [h1_acc, h1_acc]
-                    plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+                    # h1_hist_y = [h1_hist_acc, h1_hist_acc]
 
+                    # plotting
+                    plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
                     if not only_hybrid:
-                        plt.plot(h2_baseline_x, h2_baseline_y, 'k', marker='s', linewidth=4, markersize=10, label='h2 baseline')
+                        plt.plot(h2_baseline_x, h2_baseline_y, 'k', marker='s', linewidth=7, markersize=11, label='h2 baseline')
                         plt.plot(h2_on_history_not_using_history_x, h2_on_history_not_using_history_y, 'b', marker='.', linewidth=6, markersize=22, label='h2 not using history')
                         plt.plot(h2_on_history_hybrid_x, h2_on_history_hybrid_y, 'g', marker='.', linewidth=5, markersize=18, label='h2 hybrid')
                         if not only_L1:
@@ -1263,8 +1360,10 @@ if True:
                             plt.plot(h2_on_history_L2_x, h2_on_history_L2_y, 'orange', marker='.', linewidth=2, markersize=6, label='h2 using L2')
                         plt.plot(h2_on_history_L1_x, h2_on_history_L1_y, 'm', marker='.', linewidth=3, markersize=10, label='h2 using L1')
                     else:
-                        plt.plot(h2_on_history_not_using_history_x, h2_on_history_not_using_history_y, 'b', marker='.', linewidth=4, markersize=14, label='h2 not using history')
-                        plt.plot(h2_on_history_hybrid_x, h2_on_history_hybrid_y, 'g', marker='.', linewidth=3, markersize=10, label='h2 hybrid')
+                        plt.plot(h2_on_history_not_using_history_x, h2_on_history_not_using_history_y, 'b', marker='.', label='h2 not using history')
+                        # plt.plot(h1_x, h1_hist_y, 'r--', marker='.', label='h1 on history')
+                        # plt.plot(h2_on_history_using_history_x, h2_on_history_using_history_y, 'r', marker='.', label='h2 using history')
+                        plt.plot(h2_on_history_hybrid_x, h2_on_history_hybrid_y, 'g', marker='.', label='h2 hybrid')
 
                     plt.xlabel('compatibility')
                     plt.ylabel('accuracy')
@@ -1279,25 +1378,25 @@ if True:
                         'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' + str(
                             100 * history_train_fraction) + ' seed=' + str(seed))
 
-                    plt.savefig(
-                        plots_dir + '\\by_hist_length\\len_' + str(history_len) + '_' + user_group_name + '_' + str(
-                            user_id) + '.png')
-                    plt.savefig(
-                        plots_dir + '\\by_accuracy_range\\acc_' + '%.4f' % (auc_range,) + '_' + user_group_name + '_' + str(
-                            user_id) + '.png')
-                    plt.savefig(
-                        plots_dir + '\\by_compatibility_range\\com_' + '%.4f' % (com_range,) + '_' + user_group_name + '_' + str(
-                            user_id) + '.png')
+                    # plt.savefig(
+                    #     plots_dir + '\\by_hist_length\\len_' + str(history_len) + '_' + user_group_name + '_' + str(
+                    #         user_id) + '.png')
+                    # plt.savefig(
+                    #     plots_dir + '\\by_accuracy_range\\acc_' + '%.4f' % (auc_range,) + '_' + user_group_name + '_' + str(
+                    #         user_id) + '.png')
+                    # plt.savefig(
+                    #     plots_dir + '\\by_compatibility_range\\com_' + '%.4f' % (com_range,) + '_' + user_group_name + '_' + str(
+                    #         user_id) + '.png')
                     plt.savefig(
                         plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '.png')
                     # plots_dir + '\\by_user_id\\'+user_group_name+'_'+str(user_id) + '_seed_'+str(seed)+'.png')
-
-                    plt.show()
-
                     if plot_confusion:
                         plt.savefig(confusion_dir + '\\plot.png')
                         # plt.show()
 
+                    plt.show()
+
+                    # write log
                     with open(plots_dir + '\\log.csv', 'a', newline='') as file_out:
                         writer = csv.writer(file_out)
                         for i in range(len(diss_weights)):
@@ -1310,11 +1409,14 @@ if True:
                                     str(com_range),
                                     str(auc_range),
                                     str(h1_acc),
+                                    # str(h1_hist_acc),
                                     str(h2_baseline_x[i]),
                                     str(h2_baseline_y[i]),
                                     str(diss_weights[i]*diss_multiply_factor),
                                     str(h2_on_history_not_using_history_x[i]),
                                     str(h2_on_history_not_using_history_y[i]),
+                                    # str(h2_on_history_using_history_x[i]),
+                                    # str(h2_on_history_using_history_y[i]),
                                     str(h2_on_history_L0_x[i]),
                                     str(h2_on_history_L0_y[i]),
                                     str(h2_on_history_L1_x[i]),
@@ -1331,11 +1433,14 @@ if True:
                                     str(com_range),
                                     str(auc_range),
                                     str(h1_acc),
+                                    # str(h1_hist_acc),
                                     '0',
                                     '0',
                                     str(diss_weights[i] * diss_multiply_factor),
                                     str(h2_on_history_not_using_history_x[i]),
                                     str(h2_on_history_not_using_history_y[i]),
+                                    # str(h2_on_history_using_history_x[i]),
+                                    # str(h2_on_history_using_history_y[i]),
                                     str(h2_on_history_not_using_history_x[i]),
                                     str(h2_on_history_not_using_history_y[i]),
                                     str(h2_on_history_not_using_history_x[i]),
@@ -1360,27 +1465,27 @@ if True:
                             ]
                             writer.writerow(row)
 
-                    with open(plots_dir + '\\auc.csv', 'a', newline='') as file_out:
-                        writer = csv.writer(file_out)
-                        row = [
-                            str(history_train_fraction),
-                            str(user_id),
-                            str(history_len),
-                            # str(users_cos_sim[user_idx]),
-                            str(seed),
-                            str(com_range),
-                            str(auc_range),
-                            str(h1_acc),
-                            str(h2_on_history_not_using_history_area),
-                            str(h2_on_history_hybrid_area)
-                        ]
-                        if not only_hybrid:
-                            row += [
-                                str(h2_on_history_L0_area),
-                                str(h2_on_history_L1_area),
-                                str(h2_on_history_L2_area)
-                            ]
-                        writer.writerow(row)
+                    # with open(plots_dir + '\\auc.csv', 'a', newline='') as file_out:
+                    #     writer = csv.writer(file_out)
+                    #     row = [
+                    #         str(history_train_fraction),
+                    #         str(user_id),
+                    #         str(history_len),
+                    #         # str(users_cos_sim[user_idx]),
+                    #         str(seed),
+                    #         str(com_range),
+                    #         str(auc_range),
+                    #         str(h1_acc),
+                    #         str(h2_on_history_not_using_history_area),
+                    #         str(h2_on_history_hybrid_area)
+                    #     ]
+                    #     if not only_hybrid:
+                    #         row += [
+                    #             str(h2_on_history_L0_area),
+                    #             str(h2_on_history_L1_area),
+                    #             str(h2_on_history_L2_area)
+                    #         ]
+                    #     writer.writerow(row)
 
                 else:  # on test
                     # if not only_hybrid:
