@@ -698,7 +698,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
     h1_x = [min_x, 1]
 
     h1_y = [h1_acc_mean, h1_acc_mean]
-    plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+
     # plt.text(min_x, h1_acc_mean * 1.005, 'h1')
 
     # h1_hist_y = [h1_hist_acc_mean, h1_hist_acc_mean]
@@ -715,16 +715,35 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
     # plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=14, label='hybrid stat')
     # plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=14, label='hybrid nn')
 
-    plt.plot(no_hist_x, no_hist_y, 'b', marker='.', label='no hist')
     # plt.plot(h2_hist_x, h2_hist_y, 'r', marker='.', label='no hist')
     if not skip_L_models:
-        plt.plot(baseline_x, baseline_y, 'k', marker='s', markersize=4, label='baseline')
-        plt.plot(L1_x, L1_y, 'm', marker='.', label='L1')
+        plt.plot(baseline_x, baseline_y, 'b', marker='.', label='L0 personalization')
+        plt.plot(L1_x, L1_y, 'r', marker='.', label='L1 personalization')
         if not only_L1:
             plt.plot(L0_x, L0_y, 'r', marker='.', label='L0')
             plt.plot(L2_x, L2_y, 'orange', marker='.', label='L2')
     # plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', label='hybrid stat')
-    plt.plot(hybrid_nn_x, hybrid_nn_y, 'g', marker='.', label='hybrid nn')
+    plt.plot(hybrid_nn_x, hybrid_nn_y, 'g', marker='.', label='hybrid personalization')
+    plt.plot(no_hist_x, no_hist_y, 'k', marker='.', label='without personalization')
+    plt.plot(h1_x, h1_y, 'k--', marker='.', label='before update')
+
+    xlabel = 'compatibility'
+    ylabel = 'average accuracy'
+    if normalize:
+        xlabel = 'section in compatibility range'
+        ylabel = 'average section in accuracy range'
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    # plt.legend()
+
+    title = 'Average tradeoff for ' + user_type
+    if normalize:
+        title += ' normalized'
+    if method == 'bins':
+        title += '\n\n'
+    else:
+        plt.legend(loc='lower left')
+    plt.title(title)
 
     # colors = ['b', 'r']
     colors = ['b', 'g']
@@ -735,7 +754,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
             colors = ['b', 'k', 'r', 'm', 'orange', 'g']
             # colors = ['b', 'k', 'r', 'm', 'orange', 'g', 'seagreen']
         else:
-            colors = ['b', 'k', 'm', 'g']
+            colors = ['k', 'b', 'r', 'g']
             # colors = ['b', 'k', 'm', 'g', 'seagreen']
 
         # if not only_L1:
@@ -867,24 +886,6 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
             y = ys[i]
             std = stds[i]
             plt.fill_between(x, y+std, y-std, facecolor=colors[i], alpha=0.2)
-
-    xlabel = 'compatibility'
-    ylabel = 'average accuracy'
-    if normalize:
-        xlabel = 'section in compatibility range'
-        ylabel = 'average section in accuracy range'
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    # plt.legend()
-
-    title = 'average over '+user_type
-    if normalize:
-        title += ' normalized'
-    if method == 'bins':
-        title += '\n\n'
-    else:
-        plt.legend()
-    plt.title(title)
 
     file_name = 'averaged_plots_'+user_type
     if normalize:
@@ -1040,8 +1041,12 @@ def merge_csvs():
     df_log_merged.to_csv(dataset + '\\all\\log.csv')
     df_hybrid_merged.to_csv(dataset + '\\all\\hybrid_log.csv')
 
-def helping_kobi():
-    path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Semester 7\\helping kobi\\HotDiscDB 2\\arguments.csv'
+
+# def helping_kobi():
+#     encoded = '╫£╫ס╫ש╫נ ╫נ╫ש╫á╫ר╫ע╫¿╫ª╫ש╫פ ╫ץ╫á╫ש╫¬╫ץ╫ק ╫₧╫ó╫¿╫¢╫ץ╫¬ ╫ס╫ó"╫₧'
+#     decoded = 'חברת החשמל לישראל בעמ'
+#     print(string)
+
 
 plot = False
 if plot:
@@ -1062,13 +1067,13 @@ if plot:
     area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_dir, skip_L_models=True)
     # area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_dir, L1_log_path, only_L1=True, cut_by_min=True)
 
-avg = False
+avg = True
 if avg:
     dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
     # versions = ['all']
     # versions = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
     experiment = 'all history sizes\\'
-    versions = ['relationship']
+    versions = ['marital-status']
 
     for version in versions:
         version_dir = experiment + version + '\\'
