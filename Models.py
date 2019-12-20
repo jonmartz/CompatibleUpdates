@@ -262,7 +262,7 @@ class NeuralNetwork:
             batches = int(len(X_train) / batch_size)
 
             if old_model is None:  # without compatibility
-                print("TRAINING h1: train size = " + str(train_fraction))
+                # print("h1 training: train size = " + str(train_fraction))
                 # print("\nTRAINING h1:\ntrain fraction = " + str(int(100 * train_fraction)) + "%\n")
 
                 plot_x = []
@@ -328,15 +328,13 @@ class NeuralNetwork:
 
                 if history is not None:
                     if use_history:
-                        history_string = "USING " + model_type
+                        history_string = "MODEL " + model_type
                     else:
                         history_string = "IGNORE HISTORY"
                 else:
-                    history_string = "NO HISTORY"
+                    history_string = "MODEL NO HISTORY"
 
-                print("TRAINING h2: train size = " + str(train_fraction) + ", diss weight = " + str(diss_weight)
-                      # str(int(100 * train_fraction)) + "%, diss weight = " + str(diss_weight)
-                      + ", diss type = " + str(dissonance_type) + ", " + history_string)
+                # print(history_string+", train size = " + str(train_fraction) + ", diss weight = " + str(diss_weight))
 
                 # get the old model predictions
                 Y_train_old_probabilities = old_model.predict_probabilities(X_train)
@@ -520,7 +518,7 @@ class NeuralNetwork:
             # model.fit(x_history, dissonant_y, batch_size=50, epochs=300, verbose=0)
             # self.dissonant_likelihood = model.predict(x)
 
-            model = NeuralNetwork(x_history, y_dissonant, len(x_history), 200, batch_size, layers, weights_seed=1)
+            model = NeuralNetwork(x_history, y_dissonant, len(x_history), 200, 128, layers, weights_seed=1)
             tf.reset_default_graph()
 
             if method == 'nn':

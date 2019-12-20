@@ -525,20 +525,24 @@ def get_fixed_std(df_model, h1_mean_acc, users_h1_accs):
 
 
 def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, L1_log_path=None,
-                                  normalize=True, plot_area=False, plot_std=True, skip_L_models=False, only_L1=False,
+                                  normalize=True, plot_area=False, plot_std=True,
+                                  # skip_L_models=False, only_L1=False,
                                   method='ordered', num_bins=10, user_type="users"):
 
+    model_names = ['no hist', 'L3', 'hybrid']
+    colors = ['k', 'r', 'g']
+
     log_df = pd.read_csv(log_path)
-    hybrid_stat_log_df = pd.read_csv(hybrid_stat_log_path)
+    # hybrid_stat_log_df = pd.read_csv(hybrid_stat_log_path)
     hybrid_nn_log_df = pd.read_csv(hybrid_nn_log_path)
-    if only_L1:
-        L1_log_df = pd.read_csv(L1_log_path)
+    # if only_L1:
+    #     L1_log_df = pd.read_csv(L1_log_path)
 
     log_by_users = log_df.groupby(['user_id'])
-    hybrid_stat_log_by_users = hybrid_stat_log_df.groupby(['user_id'])
+    # hybrid_stat_log_by_users = hybrid_stat_log_df.groupby(['user_id'])
     hybrid_nn_log_by_users = hybrid_nn_log_df.groupby(['user_id'])
-    if only_L1:
-        L1_log_by_users = L1_log_df.groupby(['user_id'])
+    # if only_L1:
+    #     L1_log_by_users = L1_log_df.groupby(['user_id'])
 
     user_ids = log_df.user_id.unique()
 
@@ -552,9 +556,9 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
         user_count += 1
         print(str(user_count) + '/' + str(len(user_ids)) + ' user ' + str(user_id))
 
-        user_log = log_by_users.get_group(user_id).reset_index(drop=True)
-        user_hybrid_stat_log = hybrid_stat_log_by_users.get_group(user_id).reset_index(drop=True)
-        user_hybrid_nn_log = hybrid_nn_log_by_users.get_group(user_id).reset_index(drop=True)
+        user_log = log_by_users.get_group(user_id).reset_index(drop=True).groupby('diss weight').mean()
+        user_hybrid_stat_log = hybrid_stat_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
+        user_hybrid_nn_log = hybrid_nn_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
         if only_L1:
             user_L1_log = L1_log_by_users.get_group(user_id).reset_index(drop=True)
 
@@ -590,8 +594,8 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
             if not skip_L_models:
                 merged_df = merged_df.append(
-                    pd.DataFrame({'model': 'baseline', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['baseline x'],
-                                  'y': user_log['baseline y']}))
+                    pd.DataFrame({'model': 'L3', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['L3 x'],
+                                  'y': user_log['L3 y']}))
                 if not only_L1:
                     merged_df = merged_df.append(
                         pd.DataFrame({'model': 'L0', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['L0 x'], 'y': user_log['L0 y']}))
@@ -650,9 +654,9 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
         # h2_hist_x = group_mean['x']
         # h2_hist_y = group_mean['y']
         if not skip_L_models:
-            group_mean = groups.get_group('baseline').groupby('position').mean()
-            baseline_x = group_mean['x']
-            baseline_y = group_mean['y']
+            group_mean = groups.get_group('L3').groupby('position').mean()
+            L3_x = group_mean['x']
+            L3_y = group_mean['y']
             group_mean = groups.get_group('L1').groupby('position').mean()
             L1_x = group_mean['x']
             L1_y = group_mean['y']
@@ -688,9 +692,9 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
         #         min_x = min([min(i) for i in [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
 
             if not only_L1:
-                min_x = min([min(i) for i in [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
+                min_x = min([min(i) for i in [no_hist_x, L3_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
             else:
-                min_x = min([min(i) for i in [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
+                min_x = min([min(i) for i in [no_hist_x, L3_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
         else:
             # min_x = min([min(i) for i in [no_hist_x, h2_hist_x]])
             min_x = min([min(i) for i in [no_hist_x, hybrid_stat_x, hybrid_nn_x]])
@@ -707,7 +711,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
     # plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=14, label='no hist')
     # if not skip_L_models:
-    #     plt.plot(baseline_x, baseline_y, 'k', marker='s', linewidth=3, markersize=8, label='baseline')
+    #     plt.plot(L3_x, L3_y, 'k', marker='s', linewidth=3, markersize=8, label='L3')
     #     plt.plot(L1_x, L1_y, 'm', marker='.', linewidth=3, markersize=14, label='L1')
     #     if not only_L1:
     #         plt.plot(L0_x, L0_y, 'r', marker='.', linewidth=3, markersize=14, label='L0')
@@ -717,7 +721,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
 
     # plt.plot(h2_hist_x, h2_hist_y, 'r', marker='.', label='no hist')
     if not skip_L_models:
-        plt.plot(baseline_x, baseline_y, 'b', marker='.', label='L0 personalization')
+        plt.plot(L3_x, L3_y, 'b', marker='.', label='L0 personalization')
         plt.plot(L1_x, L1_y, 'r', marker='.', label='L1 personalization')
         if not only_L1:
             plt.plot(L0_x, L0_y, 'r', marker='.', label='L0')
@@ -802,15 +806,15 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
     if not skip_L_models:
 
         if not only_L1:
-            xs = [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_nn_x]
-            ys = [no_hist_y, baseline_y, L0_y, L1_y, L2_y, hybrid_nn_y]
-            # xs = [no_hist_x, baseline_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
-            # ys = [no_hist_y, baseline_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
+            xs = [no_hist_x, L3_x, L0_x, L1_x, L2_x, hybrid_nn_x]
+            ys = [no_hist_y, L3_y, L0_y, L1_y, L2_y, hybrid_nn_y]
+            # xs = [no_hist_x, L3_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
+            # ys = [no_hist_y, L3_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
         else:
-            xs = [no_hist_x, baseline_x, L1_x, hybrid_nn_x]
-            ys = [no_hist_y, baseline_y, L1_y, hybrid_nn_y]
-            # xs = [no_hist_x, baseline_x, L1_x, hybrid_stat_x, hybrid_nn_x]
-            # ys = [no_hist_y, baseline_y, L1_y, hybrid_stat_y, hybrid_nn_y]
+            xs = [no_hist_x, L3_x, L1_x, hybrid_nn_x]
+            ys = [no_hist_y, L3_y, L1_y, hybrid_nn_y]
+            # xs = [no_hist_x, L3_x, L1_x, hybrid_stat_x, hybrid_nn_x]
+            # ys = [no_hist_y, L3_y, L1_y, hybrid_stat_y, hybrid_nn_y]
 
         # if not only_L1:
         #     xs = [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
@@ -846,7 +850,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
             no_hist_std = get_fixed_std(groups.get_group('no hist'), h1_acc_mean, users_h1_accs)
             # h2_hist_std = get_fixed_std(groups.get_group('h2 hist'), h1_acc_mean, users_h1_accs)
             if not skip_L_models:
-                baseline_std = get_fixed_std(groups.get_group('baseline'), h1_acc_mean, users_h1_accs)
+                L3_std = get_fixed_std(groups.get_group('L3'), h1_acc_mean, users_h1_accs)
                 L1_std = get_fixed_std(groups.get_group('L1'), h1_acc_mean, users_h1_accs)
                 if not only_L1:
                     L0_std = get_fixed_std(groups.get_group('L0'), h1_acc_mean, users_h1_accs)
@@ -856,7 +860,7 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
             
             # no_hist_std = groups.get_group('no hist').groupby('position').std()['y']
             # if not skip_L_models:
-            #     baseline_std = groups.get_group('baseline').groupby('position').std()['y']
+            #     L3_std = groups.get_group('L3').groupby('position').std()['y']
             #     L1_std = groups.get_group('L1').groupby('position').std()['y']
             #     if not only_L1:
             #         L0_std = groups.get_group('L0').groupby('position').std()['y']
@@ -870,11 +874,11 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
         if not skip_L_models:
 
             if not only_L1:
-                stds = [no_hist_std, baseline_std, L0_std, L1_std, L2_std, hybrid_nn_std]
-                # stds = [no_hist_std, baseline_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
+                stds = [no_hist_std, L3_std, L0_std, L1_std, L2_std, hybrid_nn_std]
+                # stds = [no_hist_std, L3_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
             else:
-                stds = [no_hist_std, baseline_std, L1_std, hybrid_nn_std]
-                # stds = [no_hist_std, baseline_std, L1_std, hybrid_stat_std, hybrid_nn_std]
+                stds = [no_hist_std, L3_std, L1_std, hybrid_nn_std]
+                # stds = [no_hist_std, L3_std, L1_std, hybrid_stat_std, hybrid_nn_std]
 
             # if not only_L1:
             #     stds = [no_hist_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
@@ -1072,7 +1076,7 @@ if avg:
     dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
     # versions = ['all']
     # versions = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-    experiment = 'all history sizes\\'
+    experiment = '5-fold cross validation\\'
     versions = ['marital-status']
 
     for version in versions:
