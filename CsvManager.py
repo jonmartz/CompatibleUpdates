@@ -524,32 +524,35 @@ def get_fixed_std(df_model, h1_mean_acc, users_h1_accs):
     return df_fixed.groupby('position').std()['y']
 
 
-def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, L1_log_path=None,
-                                  normalize=True, plot_area=False, plot_std=True,
-                                  # skip_L_models=False, only_L1=False,
-                                  method='ordered', num_bins=10, user_type="users"):
+def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, user_type='users'):
 
-    model_names = ['no hist', 'L3', 'hybrid']
-    colors = ['k', 'r', 'g']
+    model_names = [
+        'L3',
+        'hybrid',
+        'no hist'
+    ]
+    labels_dict = {
+        'no hist': 'without personalization',
+        'L3': 'L3 personalization',
+        'hybrid': 'hybrid personalization'
+    }
+    colors_dict = {
+        'no hist': 'k',
+        'L3': 'r',
+        'hybrid': 'g'
+    }
+    labels = [labels_dict[i] for i in model_names]
+    colors = [colors_dict[i] for i in model_names]
 
     log_df = pd.read_csv(log_path)
-    # hybrid_stat_log_df = pd.read_csv(hybrid_stat_log_path)
-    hybrid_nn_log_df = pd.read_csv(hybrid_nn_log_path)
-    # if only_L1:
-    #     L1_log_df = pd.read_csv(L1_log_path)
+    hybrid_log_df = pd.read_csv(hybrid_log_path)
 
     log_by_users = log_df.groupby(['user_id'])
-    # hybrid_stat_log_by_users = hybrid_stat_log_df.groupby(['user_id'])
-    hybrid_nn_log_by_users = hybrid_nn_log_df.groupby(['user_id'])
-    # if only_L1:
-    #     L1_log_by_users = L1_log_df.groupby(['user_id'])
+    hybrid_log_by_users = hybrid_log_df.groupby(['user_id'])
 
     user_ids = log_df.user_id.unique()
 
-    if method == 'bins':
-        final_df = pd.DataFrame(columns=['model','x','y'])
-    elif method == 'ordered':
-        final_df = pd.DataFrame(columns=['model','user','position','x','y'])
+    final_df = pd.DataFrame(columns=['model','user','position','x','y'])
 
     user_count = 0
     for user_id in user_ids:
@@ -557,343 +560,65 @@ def plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_
         print(str(user_count) + '/' + str(len(user_ids)) + ' user ' + str(user_id))
 
         user_log = log_by_users.get_group(user_id).reset_index(drop=True).groupby('diss weight').mean()
-        user_hybrid_stat_log = hybrid_stat_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
-        user_hybrid_nn_log = hybrid_nn_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
-        if only_L1:
-            user_L1_log = L1_log_by_users.get_group(user_id).reset_index(drop=True)
+        user_hybrid_log = hybrid_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
 
-        if method == 'bins':
-            merged_df = pd.DataFrame(columns=['model', 'x', 'y'])
-            merged_df = merged_df.append(pd.DataFrame({'model': 'h1', 'x': [user_log.loc[0]['no hist x']], 'y': [user_log.loc[0]['h1 acc']]}))
-            merged_df = merged_df.append(pd.DataFrame({'model': 'no hist', 'x': user_log['no hist x'], 'y': user_log['no hist y']}))
-
-            if not skip_L_models:
-                if not only_L1:
-                    merged_df = merged_df.append(pd.DataFrame({'model': 'L0', 'x': user_log['L0 x'], 'y': user_log['L0 y']}))
-                    merged_df = merged_df.append(pd.DataFrame({'model': 'L1', 'x': user_log['L1 x'], 'y': user_log['L1 y']}))
-                    merged_df = merged_df.append(pd.DataFrame({'model': 'L2', 'x': user_log['L2 x'], 'y': user_log['L2 y']}))
-                else:
-                    merged_df = merged_df.append(pd.DataFrame({'model': 'L1', 'x': user_L1_log['L1 x'], 'y': user_L1_log['L1 y']}))
-    
-            merged_df = merged_df.append(pd.DataFrame({'model': 'hybrid stat', 'x': user_hybrid_stat_log['hybrid x'], 'y': user_hybrid_stat_log['hybrid y']}))
-            merged_df = merged_df.append(pd.DataFrame({'model': 'hybrid nn', 'x': user_hybrid_nn_log['hybrid x'], 'y': user_hybrid_nn_log['hybrid y']}))
-
-        elif method == 'ordered':
-            merged_df = pd.DataFrame(columns=['model','user','position', 'x', 'y'])
-            merged_df = merged_df.append(
-                pd.DataFrame({'model': 'h1', 'user':user_id, 'position':0, 'x': [user_log.loc[0]['no hist x']], 'y': [user_log.loc[0]['h1 acc']]}))
-            # merged_df = merged_df.append(
-            #     pd.DataFrame({'model': 'h1 hist', 'user': user_id, 'position': 0, 'x': [user_log.loc[0]['h2 hist x']],
-            #                   'y': [user_log.loc[0]['h1 hist acc']]}))
-            merged_df = merged_df.append(
-                pd.DataFrame({'model': 'no hist', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['no hist x'], 'y': user_log['no hist y']}))
-            # merged_df = merged_df.append(
-            #     pd.DataFrame(
-            #         {'model': 'h2 hist', 'user': user_id, 'position': range(len(user_log)), 'x': user_log['h2 hist x'],
-            #          'y': user_log['h2 hist y']}))
-
-            if not skip_L_models:
-                merged_df = merged_df.append(
-                    pd.DataFrame({'model': 'L3', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['L3 x'],
-                                  'y': user_log['L3 y']}))
-                if not only_L1:
-                    merged_df = merged_df.append(
-                        pd.DataFrame({'model': 'L0', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['L0 x'], 'y': user_log['L0 y']}))
-                    merged_df = merged_df.append(
-                        pd.DataFrame({'model': 'L1', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['L1 x'], 'y': user_log['L1 y']}))
-                    merged_df = merged_df.append(
-                        pd.DataFrame({'model': 'L2', 'user':user_id, 'position': range(len(user_log)), 'x': user_log['L2 x'], 'y': user_log['L2 y']}))
-                else:
-                    merged_df = merged_df.append(
-                        pd.DataFrame({'model': 'L1', 'user':user_id, 'position': range(len(user_L1_log)), 'x': user_L1_log['L1 x'], 'y': user_L1_log['L1 y']}))
-
-            merged_df = merged_df.append(pd.DataFrame(
-                {'model': 'hybrid stat', 'user':user_id, 'position': range(len(user_hybrid_stat_log)), 'x': user_hybrid_stat_log['hybrid x'], 'y': user_hybrid_stat_log['hybrid y']}))
-            merged_df = merged_df.append(pd.DataFrame(
-                {'model': 'hybrid nn', 'user':user_id, 'position': range(len(user_hybrid_nn_log)), 'x': user_hybrid_nn_log['hybrid x'], 'y': user_hybrid_nn_log['hybrid y']}))
-        
-        if normalize:
-            merged_df[['x', 'y']] = MinMaxScaler().fit_transform(merged_df[['x', 'y']])
+        merged_df = pd.DataFrame(columns=['model','user','position', 'x', 'y'])
+        merged_df = merged_df.append(
+            pd.DataFrame({'model': 'h1', 'user':user_id, 'position':0, 'x': [user_log.loc[0]['no hist x']], 'y': [user_log.loc[0]['h1 acc']]}))
+        for model_name in model_names:
+            log = user_log
+            positions = range(len(log))
+            if model_name == 'hybrid':
+                log = user_hybrid_log
+                positions = reversed(range(len(log)))
+            merged_df = merged_df.append(pd.DataFrame({'model': model_name, 'user':user_id, 'position': positions,
+                                                       'x': log[model_name+' x'], 'y': log[model_name+' y']}))
         final_df = final_df.append(merged_df)
-
-    if method == 'bins':
-        bins = [i/num_bins for i in range(num_bins+1)]
-        final_df['x'] = pd.cut(final_df['x'], bins, right=True, labels=bins[:-1], include_lowest=True)
 
     groups = final_df.groupby('model')
     h1_acc_mean = groups.get_group('h1')['y'].mean()
-    # h1_hist_acc_mean = groups.get_group('h1 hist')['y'].mean()
+    
+    models_x = []
+    models_y = []
+    for model_name in model_names:
+        group_mean = groups.get_group(model_name).groupby('position').mean()
+        x = list(group_mean['x'])
+        y = list(group_mean['y'])
+        models_x += [x]
+        models_y += [y]
+    
+    min_x = min(min(i) for i in models_x)
+    max_x = max(max(i) for i in models_x)
 
-    if method == 'bins':
-        group_mean = groups.get_group('no hist').groupby('x').mean()
-        no_hist_x = list(group_mean.index)
-        no_hist_y = group_mean['y'].fillna(method='ffill')
-        if not skip_L_models:
-            group_mean = groups.get_group('L1').groupby('x').mean()
-            L1_x = list(group_mean.index)
-            L1_y = group_mean['y'].fillna(method='ffill')
-            if not only_L1:
-                group_mean = groups.get_group('L0').groupby('x').mean()
-                L0_x = list(group_mean.index)
-                L0_y = group_mean['y'].fillna(method='ffill')
-                group_mean = groups.get_group('L2').groupby('x').mean()
-                L2_x = list(group_mean.index)
-                L2_y = group_mean['y'].fillna(method='ffill')
-        group_mean = groups.get_group('hybrid stat').groupby('x').mean()
-        hybrid_stat_x = list(group_mean.index)
-        hybrid_stat_y = group_mean['y'].fillna(method='ffill')
-        group_mean = groups.get_group('hybrid nn').groupby('x').mean()
-        hybrid_nn_x = list(group_mean.index)
-        hybrid_nn_y = group_mean['y'].fillna(method='ffill')
-
-    elif method == 'ordered':
-        group_mean = groups.get_group('no hist').groupby('position').mean()
-        no_hist_x = group_mean['x']
-        no_hist_y = group_mean['y']
-        # group_mean = groups.get_group('h2 hist').groupby('position').mean()
-        # h2_hist_x = group_mean['x']
-        # h2_hist_y = group_mean['y']
-        if not skip_L_models:
-            group_mean = groups.get_group('L3').groupby('position').mean()
-            L3_x = group_mean['x']
-            L3_y = group_mean['y']
-            group_mean = groups.get_group('L1').groupby('position').mean()
-            L1_x = group_mean['x']
-            L1_y = group_mean['y']
-            if not only_L1:
-                group_mean = groups.get_group('L0').groupby('position').mean()
-                L0_x = group_mean['x']
-                L0_y = group_mean['y']
-                group_mean = groups.get_group('L2').groupby('position').mean()
-                L2_x = group_mean['x']
-                L2_y = group_mean['y']
-        group_mean = groups.get_group('hybrid stat').groupby('position').mean()
-        hybrid_stat_x = group_mean['x']
-        hybrid_stat_y = group_mean['y']
-        group_mean = groups.get_group('hybrid nn').groupby('position').mean()
-        hybrid_nn_x = group_mean['x']
-        hybrid_nn_y = group_mean['y']
-
-    if method == 'bins':
-        if not skip_L_models:
-            if not only_L1:
-                min_x = min([i.first_valid_index() for i in [no_hist_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]])
-            else:
-                min_x = min([i.first_valid_index() for i in [no_hist_y, L1_y, hybrid_stat_y, hybrid_nn_y]])
-        else:
-            min_x = min([i.first_valid_index() for i in [no_hist_y, hybrid_stat_y, hybrid_nn_y]])
-
-    elif method == 'ordered':
-        if not skip_L_models:
-
-        #     if not only_L1:
-        #         min_x = min([min(i) for i in [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
-        #     else:
-        #         min_x = min([min(i) for i in [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
-
-            if not only_L1:
-                min_x = min([min(i) for i in [no_hist_x, L3_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]])
-            else:
-                min_x = min([min(i) for i in [no_hist_x, L3_x, L1_x, hybrid_stat_x, hybrid_nn_x]])
-        else:
-            # min_x = min([min(i) for i in [no_hist_x, h2_hist_x]])
-            min_x = min([min(i) for i in [no_hist_x, hybrid_stat_x, hybrid_nn_x]])
-
-    h1_x = [min_x, 1]
-
+    h1_x = [min_x, max_x]
     h1_y = [h1_acc_mean, h1_acc_mean]
 
-    # plt.text(min_x, h1_acc_mean * 1.005, 'h1')
-
-    # h1_hist_y = [h1_hist_acc_mean, h1_hist_acc_mean]
-    # plt.plot(h1_x, h1_hist_y, 'r--', marker='.', label='h1 on history')
-    # # plt.text(min_x, h1_hist_acc_mean * 1.005, 'h1 on history')
-
-    # plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=14, label='no hist')
-    # if not skip_L_models:
-    #     plt.plot(L3_x, L3_y, 'k', marker='s', linewidth=3, markersize=8, label='L3')
-    #     plt.plot(L1_x, L1_y, 'm', marker='.', linewidth=3, markersize=14, label='L1')
-    #     if not only_L1:
-    #         plt.plot(L0_x, L0_y, 'r', marker='.', linewidth=3, markersize=14, label='L0')
-    #         plt.plot(L2_x, L2_y, 'orange', marker='.', linewidth=3, markersize=14, label='L2')
-    # plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=14, label='hybrid stat')
-    # plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=14, label='hybrid nn')
-
-    # plt.plot(h2_hist_x, h2_hist_y, 'r', marker='.', label='no hist')
-    if not skip_L_models:
-        plt.plot(L3_x, L3_y, 'b', marker='.', label='L0 personalization')
-        plt.plot(L1_x, L1_y, 'r', marker='.', label='L1 personalization')
-        if not only_L1:
-            plt.plot(L0_x, L0_y, 'r', marker='.', label='L0')
-            plt.plot(L2_x, L2_y, 'orange', marker='.', label='L2')
-    # plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', label='hybrid stat')
-    plt.plot(hybrid_nn_x, hybrid_nn_y, 'g', marker='.', label='hybrid personalization')
-    plt.plot(no_hist_x, no_hist_y, 'k', marker='.', label='without personalization')
+    for i in range(len(model_names)):
+        plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i])
     plt.plot(h1_x, h1_y, 'k--', marker='.', label='before update')
 
     xlabel = 'compatibility'
     ylabel = 'average accuracy'
-    if normalize:
-        xlabel = 'section in compatibility range'
-        ylabel = 'average section in accuracy range'
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    # plt.legend()
-
+    plt.legend(loc='lower left')
+    plt.grid()
     title = 'Average tradeoff for ' + user_type
-    if normalize:
-        title += ' normalized'
-    if method == 'bins':
-        title += '\n\n'
-    else:
-        plt.legend(loc='lower left')
     plt.title(title)
 
-    # colors = ['b', 'r']
-    colors = ['b', 'g']
-    # colors = ['b', 'g', 'seagreen']
-    if not skip_L_models:
-
-        if not only_L1:
-            colors = ['b', 'k', 'r', 'm', 'orange', 'g']
-            # colors = ['b', 'k', 'r', 'm', 'orange', 'g', 'seagreen']
-        else:
-            colors = ['k', 'b', 'r', 'g']
-            # colors = ['b', 'k', 'm', 'g', 'seagreen']
-
-        # if not only_L1:
-        #     colors = ['b', 'r', 'm', 'orange', 'g', 'seagreen']
-        # else:
-        #     colors = ['b', 'm', 'g', 'seagreen']
-
-    # area
-    if method == 'bins':
-        h1_area = (1 - min_x - no_hist_x[1]) * h1_acc_mean
-        no_hist_area = safe_auc(no_hist_x, no_hist_y) - h1_area
-        if not skip_L_models:
-            L1_area = safe_auc(L1_x, L1_y) - h1_area
-            if not only_L1:
-                L0_area = safe_auc(L0_x, L0_y) - h1_area
-                L2_area = safe_auc(L2_x, L2_y) - h1_area
-        hybrid_stat_area = safe_auc(hybrid_stat_x, hybrid_stat_y) - h1_area
-        hybrid_nn_area = safe_auc(hybrid_nn_x, hybrid_nn_y) - h1_area
-
-        # plot area
-        areas = [no_hist_area, hybrid_stat_area, hybrid_nn_area]
-        col_labels = ['no hist', 'hybrid stat', 'hybrid nn']
-        if not skip_L_models:
-            if not only_L1:
-                areas = [no_hist_area, L0_area, L1_area, L2_area, hybrid_stat_area, hybrid_nn_area]
-                col_labels = ['no hist', 'L0', 'L1', 'L2', 'hybrid stat', 'hybrid nn']
-            else:
-                areas = [no_hist_area, L1_area, hybrid_stat_area, hybrid_nn_area]
-                col_labels = ['no hist', 'L1', 'hybrid stat', 'hybrid nn']
-
-        cell_text = [(['%1.4f' % (area) for area in areas])]
-        row_labels = ['area']
-
-        table = plt.table(cellText=cell_text, rowLabels=row_labels, colColours=colors, colLabels=col_labels,
-                          loc='top', cellLoc='center')
-        table.scale(1, 1.2)
-        plt.subplots_adjust(top=0.85)
-
-    # xs = [no_hist_x, h2_hist_x]
-    # ys = [no_hist_y, h2_hist_y]
-    xs = [no_hist_x, hybrid_nn_x]
-    ys = [no_hist_y, hybrid_nn_y]
-    # xs = [no_hist_x, hybrid_stat_x, hybrid_nn_x]
-    # ys = [no_hist_y, hybrid_stat_y, hybrid_nn_y]
-    if not skip_L_models:
-
-        if not only_L1:
-            xs = [no_hist_x, L3_x, L0_x, L1_x, L2_x, hybrid_nn_x]
-            ys = [no_hist_y, L3_y, L0_y, L1_y, L2_y, hybrid_nn_y]
-            # xs = [no_hist_x, L3_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
-            # ys = [no_hist_y, L3_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
-        else:
-            xs = [no_hist_x, L3_x, L1_x, hybrid_nn_x]
-            ys = [no_hist_y, L3_y, L1_y, hybrid_nn_y]
-            # xs = [no_hist_x, L3_x, L1_x, hybrid_stat_x, hybrid_nn_x]
-            # ys = [no_hist_y, L3_y, L1_y, hybrid_stat_y, hybrid_nn_y]
-
-        # if not only_L1:
-        #     xs = [no_hist_x, L0_x, L1_x, L2_x, hybrid_stat_x, hybrid_nn_x]
-        #     ys = [no_hist_y, L0_y, L1_y, L2_y, hybrid_stat_y, hybrid_nn_y]
-        # else:
-        #     xs = [no_hist_x, L1_x, hybrid_stat_x, hybrid_nn_x]
-        #     ys = [no_hist_y, L1_y, hybrid_stat_y, hybrid_nn_y]
-
-
-    if plot_area:
-        for i in range(len(xs)):
-            x = xs[i]
-            y = ys[i]
-            plt.fill_between(x, [h1_acc_mean] * len(x), y, facecolor=colors[i], alpha=0.2)
-
-    elif plot_std:  # plot std
-        if method == 'bins':
-            no_hist_std = groups.get_group('no hist').groupby('x').std()['y']
-            if not skip_L_models:
-                L1_std = groups.get_group('L1').groupby('x').std()['y']
-                if not only_L1:
-                    L0_std = groups.get_group('L0').groupby('x').std()['y']
-                    L2_std = groups.get_group('L2').groupby('x').std()['y']
-            hybrid_stat_std = groups.get_group('hybrid stat').groupby('x').std()['y']
-            hybrid_nn_std = groups.get_group('hybrid nn').groupby('x').std()['y']
-
-        elif method == 'ordered':
-            users_h1_accs = {}
-            for user_id, user_data in groups.get_group('h1').groupby('user'):
-                user_data = user_data.reset_index(drop=True)
-                users_h1_accs[user_id] = user_data['y'][0]
-
-            no_hist_std = get_fixed_std(groups.get_group('no hist'), h1_acc_mean, users_h1_accs)
-            # h2_hist_std = get_fixed_std(groups.get_group('h2 hist'), h1_acc_mean, users_h1_accs)
-            if not skip_L_models:
-                L3_std = get_fixed_std(groups.get_group('L3'), h1_acc_mean, users_h1_accs)
-                L1_std = get_fixed_std(groups.get_group('L1'), h1_acc_mean, users_h1_accs)
-                if not only_L1:
-                    L0_std = get_fixed_std(groups.get_group('L0'), h1_acc_mean, users_h1_accs)
-                    L2_std = get_fixed_std(groups.get_group('L2'), h1_acc_mean, users_h1_accs)
-            # hybrid_stat_std = get_fixed_std(groups.get_group('hybrid stat'), h1_acc_mean, users_h1_accs)
-            hybrid_nn_std = get_fixed_std(groups.get_group('hybrid nn'), h1_acc_mean, users_h1_accs)
-            
-            # no_hist_std = groups.get_group('no hist').groupby('position').std()['y']
-            # if not skip_L_models:
-            #     L3_std = groups.get_group('L3').groupby('position').std()['y']
-            #     L1_std = groups.get_group('L1').groupby('position').std()['y']
-            #     if not only_L1:
-            #         L0_std = groups.get_group('L0').groupby('position').std()['y']
-            #         L2_std = groups.get_group('L2').groupby('position').std()['y']
-            # hybrid_stat_std = groups.get_group('hybrid stat').groupby('position').std()['y']
-            # hybrid_nn_std = groups.get_group('hybrid nn').groupby('position').std()['y']
-
-        # stds = [no_hist_std, h2_hist_std]
-        stds = [no_hist_std, hybrid_nn_std]
-        # stds = [no_hist_std, hybrid_stat_std, hybrid_nn_std]
-        if not skip_L_models:
-
-            if not only_L1:
-                stds = [no_hist_std, L3_std, L0_std, L1_std, L2_std, hybrid_nn_std]
-                # stds = [no_hist_std, L3_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
-            else:
-                stds = [no_hist_std, L3_std, L1_std, hybrid_nn_std]
-                # stds = [no_hist_std, L3_std, L1_std, hybrid_stat_std, hybrid_nn_std]
-
-            # if not only_L1:
-            #     stds = [no_hist_std, L0_std, L1_std, L2_std, hybrid_stat_std, hybrid_nn_std]
-            # else:
-            #     stds = [no_hist_std, L1_std, hybrid_stat_std, hybrid_nn_std]
-
-        for i in range(len(xs)):
-            x = xs[i]
-            y = ys[i]
-            std = stds[i]
-            plt.fill_between(x, y+std, y-std, facecolor=colors[i], alpha=0.2)
+    # plot std
+    users_h1_accs = {}
+    for user_id, user_data in groups.get_group('h1').groupby('user'):
+        user_data = user_data.reset_index(drop=True)
+        users_h1_accs[user_id] = user_data['y'][0]
+    stds = [get_fixed_std(groups.get_group(i), h1_acc_mean, users_h1_accs) for i in model_names]
+    for i in range(len(models_x)):
+        x = models_x[i]
+        y = models_y[i]
+        std = stds[i]
+        plt.fill_between(x, y+std, y-std, facecolor=colors[i], alpha=0.2)
 
     file_name = 'averaged_plots_'+user_type
-    if normalize:
-        file_name += '_normalized'
     plt.savefig(results_dir + '\\'+file_name+'.png')
     plt.show()
     # plt.clf()
@@ -1088,12 +813,7 @@ if avg:
         hybrid_nn_log_path = dataset + version_dir + 'hybrid_log.csv'
         results_dir = dataset + experiment + 'all\\'
 
-        plots_averaged_over_all_users(log_path, hybrid_stat_log_path, hybrid_nn_log_path, results_dir, L1_log_path,
-                                      normalize=False,
-                                      plot_std=True,
-                                      skip_L_models=False,
-                                      only_L1=True,
-                                      user_type=version)
+        plots_averaged_over_all_users(log_path, hybrid_nn_log_path, results_dir, user_type=version)
 
 # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
     # L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'

@@ -147,21 +147,21 @@ regularization = 0
 seeds = range(5)
 # seeds = [0]
 
-diss_count = 5
+diss_count = 10
 normalize_diss_weight = True
 if normalize_diss_weight:
     diss_weights = [(i + i / (diss_count - 1)) / diss_count for i in range(diss_count)]
     diss_multiply_factor = 1
 else:
     diss_weights = range(diss_count)
-    diss_multiply_factor = 1.0  # [0, 4]
+    diss_multiply_factor = 1.0
 
 
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
-min_history_size = 50
-max_history_size = 10000
+min_history_size = 100
+max_history_size = 100000
 current_user_count = 0
 user_max_count = 30
 
@@ -442,8 +442,6 @@ for categ in original_categ_cols:
                 if min_history_size <= history_len <= max_history_size:
                     total_users += 1
                     user_ids_in_range += [user_id]
-                    # user_test_sets[user_id] = user_test_set.drop(columns=[user_group_names[1]])
-                    # user_train_sets[user_id] = user_train_set.drop(columns=[user_group_names[1]])
                     user_test_sets[user_id] = user_test_set
                     user_train_sets[user_id] = user_train_set
 
@@ -548,21 +546,6 @@ for categ in original_categ_cols:
                                 path = confusion_dir + '\\'+model_name+'_seed_'+str(seed)+'_' + str(j) + '.png'
                                 plot_confusion_matrix(result['predicted'], history_test_y, title, path)
 
-                    # for model in h2_on_history_x:
-                    #     min_model = min(model)
-                    #     if min_x > min_model:
-                    #         min_x = min_model
-                    #     max_model = max(model)
-                    #     if max_x < max_model:
-                    #         max_x = max_model
-                    # for model in h2_on_history_y:
-                    #     min_model = min(model)
-                    #     if min_y > min_model:
-                    #         min_y = min_model
-                    #     max_model = max(model)
-                    #     if max_y < max_model:
-                    #         max_y = max_model
-
                     min_x = min(min(i) for i in models_x)
                     min_y = min(min(i) for i in models_y)
                     max_x = max(max(i) for i in models_x)
@@ -572,44 +555,6 @@ for categ in original_categ_cols:
                         mono_xs = [i.copy() for i in models_x]
                         mono_ys = [i.copy() for i in models_y]
 
-                        # mono_h2_on_history_not_using_history_x = h2_on_history_not_using_history_x.copy()
-                        # mono_h2_on_history_not_using_history_y = h2_on_history_not_using_history_y.copy()
-                        # # mono_h2_on_history_using_history_x = h2_on_history_using_history_x.copy()
-                        # # mono_h2_on_history_using_history_y = h2_on_history_using_history_y.copy()
-                        # mono_h2_on_history_hybrid_x = h2_on_history_hybrid_x.copy()
-                        # mono_h2_on_history_hybrid_y = h2_on_history_hybrid_y.copy()
-                        # 
-                        # mono_h2_xs = [mono_h2_on_history_not_using_history_x,
-                        #               # mono_h2_on_history_using_history_x,
-                        #               mono_h2_on_history_hybrid_x]
-                        # mono_h2_ys = [mono_h2_on_history_not_using_history_y,
-                        #               # mono_h2_on_history_using_history_y,
-                        #               mono_h2_on_history_hybrid_y]
-                        # 
-                        # if not only_hybrid:
-                        #     mono_L3_x = L3_x.copy()
-                        #     mono_L3_y = L3_y.copy()
-                        #     mono_h2_on_history_L0_x = h2_on_history_L0_x.copy()
-                        #     mono_h2_on_history_L1_x = h2_on_history_L1_x.copy()
-                        #     mono_h2_on_history_L2_x = h2_on_history_L2_x.copy()
-                        #     mono_h2_on_history_L0_y = h2_on_history_L0_y.copy()
-                        #     mono_h2_on_history_L1_y = h2_on_history_L1_y.copy()
-                        #     mono_h2_on_history_L2_y = h2_on_history_L2_y.copy()
-                        # 
-                        #     mono_h2_xs += [mono_L3_x]
-                        #     mono_h2_ys += [mono_L3_y]
-                        # 
-                        #     if only_L1:
-                        #         mono_h2_xs += [mono_h2_on_history_L1_x]
-                        #         mono_h2_ys += [mono_h2_on_history_L1_y]
-                        #     else:
-                        #         mono_h2_xs += [mono_h2_on_history_L0_x,
-                        #                        mono_h2_on_history_L1_x,
-                        #                        mono_h2_on_history_L2_x]
-                        #         mono_h2_ys += [mono_h2_on_history_L0_y,
-                        #                        mono_h2_on_history_L1_y,
-                        #                        mono_h2_on_history_L2_y]
-
                         for i in range(len(mono_xs)):
                             make_monotonic(mono_xs[i], mono_ys[i])
 
@@ -618,23 +563,6 @@ for categ in original_categ_cols:
                         areas = [auc([min_x] + mono_xs[i] + [1], [mono_ys[i][0]] + mono_ys[i] + [h1_acc]) - h1_area
                                  for i in range(len(mono_xs))]
                         
-                        # h2_on_history_not_using_history_area = auc([min_x] + mono_h2_on_history_not_using_history_x + [1],
-                        #                                            [mono_h2_on_history_not_using_history_y[0]] + mono_h2_on_history_not_using_history_y + [h1_acc]) - h1_area
-                        # # h2_on_history_using_history_area = auc([min_x] + mono_h2_on_history_using_history_x + [1],
-                        # #                                        [mono_h2_on_history_using_history_y[0]] + mono_h2_on_history_using_history_y + [h1_acc]) - h1_area
-                        # h2_on_history_hybrid_area = auc([min_x] + mono_h2_on_history_hybrid_x + [1],
-                        #                                 [mono_h2_on_history_hybrid_y[0]] + mono_h2_on_history_hybrid_y + [h1_acc]) - h1_area
-                        # 
-                        # if not only_hybrid:
-                        #     L3_area = auc([min_x] + mono_L3_x + [1],
-                        #                   [mono_L3_y[0]] + mono_L3_y + [h1_acc]) - h1_area
-                        #     h2_on_history_L1_area = auc([min_x] + mono_h2_on_history_L1_x + [1],
-                        #                                 [mono_h2_on_history_L1_y[0]] + mono_h2_on_history_L1_y + [h1_acc]) - h1_area
-                        #     h2_on_history_L0_area = auc([min_x] + mono_h2_on_history_L0_x + [1],
-                        #                                 [mono_h2_on_history_L0_y[0]] + mono_h2_on_history_L0_y + [h1_acc]) - h1_area
-                        #     h2_on_history_L2_area = auc([min_x] + mono_h2_on_history_L2_x + [1],
-                        #                                 [mono_h2_on_history_L2_y[0]] + mono_h2_on_history_L2_y + [h1_acc]) - h1_area
-
                     com_range = max_x - min_x
                     auc_range = max_y - min_y
 
@@ -642,20 +570,6 @@ for categ in original_categ_cols:
                     h1_x = [min_x, max_x]
                     h1_y = [h1_acc, h1_acc]
                     plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
-
-                    # if not only_hybrid:
-                    #     plt.plot(L3_x, L3_y, 'k', marker='s', linewidth=7, markersize=11, label='h2 L3')
-                    #     plt.plot(h2_on_history_not_using_history_x, h2_on_history_not_using_history_y, 'b', marker='.', linewidth=6, markersize=22, label='h2 not using history')
-                    #     plt.plot(h2_on_history_hybrid_x, h2_on_history_hybrid_y, 'g', marker='.', linewidth=5, markersize=18, label='h2 hybrid')
-                    #     if not only_L1:
-                    #         plt.plot(h2_on_history_L0_x, h2_on_history_L0_y, 'r', marker='.', linewidth=4, markersize=14, label='h2 using L0')
-                    #         plt.plot(h2_on_history_L2_x, h2_on_history_L2_y, 'orange', marker='.', linewidth=2, markersize=6, label='h2 using L2')
-                    #     plt.plot(h2_on_history_L1_x, h2_on_history_L1_y, 'm', marker='.', linewidth=3, markersize=10, label='h2 using L1')
-                    # else:
-                    #     plt.plot(h2_on_history_not_using_history_x, h2_on_history_not_using_history_y, 'b', marker='.', label='h2 not using history')
-                    #     # plt.plot(h1_x, h1_hist_y, 'r--', marker='.', label='h1 on history')
-                    #     # plt.plot(h2_on_history_using_history_x, h2_on_history_using_history_y, 'r', marker='.', label='h2 using history')
-                    #     plt.plot(h2_on_history_hybrid_x, h2_on_history_hybrid_y, 'g', marker='.', label='h2 hybrid')
 
                     for i in range(len(model_names)):
                         plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=model_names[i])
@@ -671,8 +585,6 @@ for categ in original_categ_cols:
 
                     if plot_confusion:
                         plt.savefig(confusion_dir + '\\plot.png')
-                        # plt.show()
-
                     if show_plots:
                         plt.show()
 
@@ -701,8 +613,7 @@ for categ in original_categ_cols:
                     h2_x = []
                     h2_y = []
                     for i in range(len(h2s_not_using_history)):
-                        h2 = h2s_not_using_history[i]
-                        result = h2.test(history_test_x, history_test_y, h1)
+                        result = h2s_not_using_history[i].test(history_test_x, history_test_y, h1)
                         h2_x += [result['compatibility']]
                         h2_y += [result['auc']]
 
@@ -712,12 +623,7 @@ for categ in original_categ_cols:
                             path = confusion_dir + '\\test_seed_'+str(seed)+'_'+str(i)+'.png'
                             plot_confusion_matrix(result['predicted'], history_test_y, title, path)
 
-                    min_x = min(h2_x)
-                    max_x = max(h2_x)
-                    min_y = min(h2_y)
-                    max_y = max(h2_y)
-
-                    h1_x = [min_x, max_x]
+                    h1_x = [min(h2_x), max(h2_x)]
                     h1_y = [h1_acc, h1_acc]
                     plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
                     plt.plot(h2_x, h2_y, 'b', marker='.', label='h2')
@@ -732,5 +638,4 @@ for categ in original_categ_cols:
                     if plot_confusion:
                         plt.savefig(confusion_dir+'\\plot.png')
                     plt.show()
-
                 plt.clf()
