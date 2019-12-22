@@ -7,7 +7,9 @@ from numpy import dot
 from numpy.linalg import norm
 import time
 import numpy as np
-
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.patches as patches
 
 def analyze_histories(dataset_path, user_directory, user_col):
 
@@ -360,6 +362,95 @@ def history_split_correlation_all_student_pairs():
             writer.writerows(rows)
 
 
+def cross_analyze_features(dataset_path, result_path, original_categ_cols, target_col, avg_plots_path):
+    # # df = sns.load_dataset('iris')
+    # df = pd.read_csv(dataset_path)[:100]
+    #
+    # # plt.figure(figsize=(10, 8), dpi=80)
+    # sns.pairplot(df, kind="reg", hue="salary")
+    # plt.show()
+
+    df_original = pd.read_csv(dataset_path)
+    alpha = 0.5
+    all_color = 'blue'
+
+    users_count = 1
+    for user_col in original_categ_cols:
+        print('%d/%d '%(users_count, len(original_categ_cols)) + user_col)
+        categ_cols = original_categ_cols.copy()
+        categ_cols.remove(user_col)
+
+        user_groups = df_original.groupby(user_col)
+        user_ids = list(user_groups.groups.keys())
+
+        rows = len(user_ids)
+        cols = len(df_original.columns)
+        fig, axs = plt.subplots(rows, cols, sharex='col', figsize=(cols*3, rows*3))
+        fig.suptitle(user_col + ' as users', fontsize='50')
+
+        all_bins = []
+        for all in [True, False]:
+            k = 0
+            if all:
+                print('adding total dist')
+            for i in range(rows):
+                user_id = user_ids[i]
+                df = user_groups.get_group(user_id)
+                if not all:
+                    print('\t'+user_id)
+                for j in range(len(df.columns)):
+                    col = df.columns[j]
+                    if not all:
+                        print('\t\t'+col)
+                    ax = axs[i, j]
+                    if all:
+                        user_id = 'all'
+                        df = df_original
+                    else:
+                        if i == 0:
+                            ax.set_title(col)
+                        if j == 0:
+                            ax.set_ylabel(user_id)
+
+                    if col == user_col:
+                        if not all:
+                            try:
+                                image_file = '%s\\%s\\by_user_id\\%s_%s.png'%(avg_plots_path, user_col, user_col, user_id)
+                                image = plt.imread(image_file)
+                                ax.imshow(image)
+                            except:
+                                pass
+                        ax.axis('off')
+                        continue
+
+                    plt.setp(ax.get_xticklabels(), visible=False)
+                    plt.setp(ax.get_yticklabels(), visible=False)
+                    ax.tick_params(axis='both', which='both', length=0)
+
+                    color = 'red'
+                    if all:
+                        color = all_color
+                    if col in categ_cols or col == target_col:
+                        counts = df[col].value_counts()
+                        names = list(counts.index)
+                        counts = counts / counts.sum()
+                        ax.bar(names, counts, color=color, alpha=alpha)
+                    else:
+                        if all:
+                            num_bins = min(20, df[col].nunique())
+                            all_bins += [np.histogram_bin_edges(df[col], bins=num_bins)]
+                        bins = all_bins[k]
+                        k += 1
+                        hist = np.histogram(df[col], bins)
+                        counts = hist[0]
+                        d = (bins[1] - bins[0])/2
+                        x = [i + d for i in bins[:-1]]
+                        y = counts / counts.sum()
+                        ax.fill_between(x, 0, y, color=color, alpha=alpha)
+
+        plt.savefig(result_path + '\\' + user_col + ' as users')
+
+
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific.csv'
 # user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\analysis\\users'
 
@@ -384,14 +475,29 @@ def history_split_correlation_all_student_pairs():
 # # categ_cols = ['original_language', 'rating']
 
 dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
-user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\analysis'
+result_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\analysis\\cross analysis'
 categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+target_col = 'salary'
 
-if not os.path.exists(user_directory):
-    os.makedirs(user_directory)
+if not os.path.exists(result_path):
+    os.makedirs(result_path)
 
 # user_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 # for user_col in user_cols:
 #     analyze_histories(dataset_path, user_directory, user_col)
 
-analyze_features(dataset_path, user_directory, '', categ_cols)
+avg_plots_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\history sizes from 400 to 10000\\by user type'
+target_col = 'salary'
+
+cross_analyze_features(dataset_path, result_path, categ_cols, target_col, avg_plots_path)
+
+# image_file = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\history sizes from 400 to 10000\\by user type\\workclass\\by_user_id\\workclass_Federal-gov.png'
+#
+# image = plt.imread(image_file)
+# fig, ax = plt.subplots()
+# im = ax.imshow(image)
+# patch = patches.Rectangle((80, 55), 500, 395, transform=ax.transData)
+# im.set_clip_path(patch)
+#
+# ax.axis('off')
+# plt.show()

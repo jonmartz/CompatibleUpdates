@@ -372,23 +372,24 @@ for categ in original_categ_cols:
                     first_diss = False
                 h2s_not_using_history_by_seed += [h2s_not_using_history]
 
-        plot_x = list(range(h1_epochs))
-        plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
-        plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
-        plt.xlabel('epoch')
-        plt.ylabel('accuracy')
-        plt.legend()
-        plt.grid()
-        if only_train_h1:
-            plt.ylim(bottom, top)
-        runtime = int((round(time.time() * 1000)) - start_time) / 60000
-        plt.title('seed='+str(seed)+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
-                  ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
-                  + ' reg=' + str(regularization))
-        plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
         if show_plots:
-            plt.show()
-        plt.clf()
+            plot_x = list(range(h1_epochs))
+            plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
+            plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
+            plt.xlabel('epoch')
+            plt.ylabel('accuracy')
+            plt.legend()
+            plt.grid()
+            if only_train_h1:
+                plt.ylim(bottom, top)
+            runtime = int((round(time.time() * 1000)) - start_time) / 60000
+            plt.title('seed='+str(seed)+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
+                      ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
+                      + ' reg=' + str(regularization))
+            plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
+            if show_plots:
+                plt.show()
+            plt.clf()
 
     if only_train_h1:
         exit()
