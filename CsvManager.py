@@ -505,12 +505,18 @@ def safe_auc(x, y):
     return auc(x_reset, y_reset)
 
 
-def get_fixed_std(df_model, h1_mean_acc, users_h1_accs):
+def get_fixed_std(df_model, h1_mean_acc, users_h1_accs, weighted=False):
     users = df_model.groupby('user')
     model_mean_initial_acc = df_model.groupby('position').mean().reset_index(drop=True)['y'][0]
     df_fixed = pd.DataFrame(columns=['position', 'y'])
     for user_id, user_data in users:
         user_data = user_data.reset_index(drop=True)
+
+        if weighted:
+            size = int(user_data['size'][0])
+            user_data = user_data.drop(columns=['size'])
+            user_data = pd.concat([user_data] * size, ignore_index=True)
+
         user_y = user_data['y']
         model_user_initial_acc = user_y[0]
         h1_user_acc = users_h1_accs[user_id]
@@ -524,7 +530,8 @@ def get_fixed_std(df_model, h1_mean_acc, users_h1_accs):
     return df_fixed.groupby('position').std()['y']
 
 
-def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, user_type='users'):
+def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
+                                  user_type='users', save_user_id='', simple_plots=False, weighted=True):
 
     model_names = [
         'L3',
@@ -552,7 +559,7 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, user_t
 
     user_ids = log_df.user_id.unique()
 
-    final_df = pd.DataFrame(columns=['model','user','position','x','y'])
+    final_df = pd.DataFrame(columns=['model', 'user', 'size', 'position', 'x', 'y'])
 
     user_count = 0
     for user_id in user_ids:
@@ -562,28 +569,42 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, user_t
         user_log = log_by_users.get_group(user_id).reset_index(drop=True).groupby('diss weight').mean()
         user_hybrid_log = hybrid_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
 
-        merged_df = pd.DataFrame(columns=['model','user','position', 'x', 'y'])
+        size = user_log['instances'][0]
+
+        merged_df = pd.DataFrame(columns=['model', 'user', 'size', 'position', 'x', 'y'])
         merged_df = merged_df.append(
-            pd.DataFrame({'model': 'h1', 'user':user_id, 'position':0, 'x': [user_log.loc[0]['no hist x']], 'y': [user_log.loc[0]['h1 acc']]}))
+            pd.DataFrame({'model': 'h1', 'user':user_id, 'size':size, 'position':0, 'x': [user_log.loc[0]['no hist x']], 'y': [user_log.loc[0]['h1 acc']]}))
         for model_name in model_names:
             log = user_log
             positions = range(len(log))
             if model_name == 'hybrid':
                 log = user_hybrid_log
                 positions = reversed(range(len(log)))
-            merged_df = merged_df.append(pd.DataFrame({'model': model_name, 'user':user_id, 'position': positions,
+            merged_df = merged_df.append(pd.DataFrame({'model': model_name, 'user': user_id, 'size':size, 'position': positions,
                                                        'x': log[model_name+' x'], 'y': log[model_name+' y']}))
         final_df = final_df.append(merged_df)
 
     groups = final_df.groupby('model')
-    h1_acc_mean = groups.get_group('h1')['y'].mean()
-    
+    h1_group = groups.get_group('h1')[['size', 'y']].reset_index(drop=True)
+    h1_acc_mean = np.average(h1_group['y'], weights=h1_group['size'])
+
     models_x = []
     models_y = []
     for model_name in model_names:
-        group_mean = groups.get_group(model_name).groupby('position').mean()
-        x = list(group_mean['x'])
-        y = list(group_mean['y'])
+        group = groups.get_group(model_name)
+
+        if weighted:
+            weighted_group = group.copy()
+            weighted_group['y'] = weighted_group['y'] * weighted_group['size']
+            weighted_group['x'] = weighted_group['x'] * weighted_group['size']
+            weighted_sum = weighted_group.groupby('position').sum()
+            x = list(weighted_sum['x'] / weighted_sum['size'])
+            y = list(weighted_sum['y'] / weighted_sum['size'])
+        else:
+            group_mean = group.groupby('position').mean()
+            x = list(group_mean['x'])
+            y = list(group_mean['y'])
+
         models_x += [x]
         models_y += [y]
     
@@ -593,36 +614,67 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, user_t
     h1_x = [min_x, max_x]
     h1_y = [h1_acc_mean, h1_acc_mean]
 
-    for i in range(len(model_names)):
-        plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i])
-    plt.plot(h1_x, h1_y, 'k--', marker='.', label='before update')
+    if simple_plots:
+        linewidth = 12
+        markersize = 40
+        plot_alpha = 1
 
-    xlabel = 'compatibility'
-    ylabel = 'average accuracy'
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.legend(loc='lower left')
-    plt.grid()
-    title = 'Average tradeoff for ' + user_type
-    plt.title(title)
+        for i in range(len(model_names)):
+            plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i], linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
+        plt.plot(h1_x, h1_y, 'k--', marker='.', label='before update', linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
 
-    # plot std
-    users_h1_accs = {}
-    for user_id, user_data in groups.get_group('h1').groupby('user'):
-        user_data = user_data.reset_index(drop=True)
-        users_h1_accs[user_id] = user_data['y'][0]
-    stds = [get_fixed_std(groups.get_group(i), h1_acc_mean, users_h1_accs) for i in model_names]
-    for i in range(len(models_x)):
-        x = models_x[i]
-        y = models_y[i]
-        std = stds[i]
-        plt.fill_between(x, y+std, y-std, facecolor=colors[i], alpha=0.2)
+    else:
+        for i in range(len(model_names)):
+            plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i])
+        plt.plot(h1_x, h1_y, 'k--', marker='.', label='before update')
 
-    file_name = 'averaged_plots_'+user_type
-    plt.savefig(results_dir + '\\'+file_name+'.png')
+    if not simple_plots:
+        xlabel = 'compatibility'
+        ylabel = 'average accuracy'
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.legend(loc='lower left')
+        plt.grid()
+
+        delimiter = ' = '
+        if save_user_id == '':
+            delimiter = ''
+        title = 'Average tradeoff for %s%s%s' % (user_type, delimiter, save_user_id)
+        plt.title(title)
+
+        # plot std
+        users_h1_accs = {}
+        for user_id, user_data in groups.get_group('h1').groupby('user'):
+            user_data = user_data.reset_index(drop=True)
+            users_h1_accs[user_id] = user_data['y'][0]
+
+        stds = [get_fixed_std(groups.get_group(i), h1_acc_mean, users_h1_accs, weighted) for i in model_names]
+        for i in range(len(models_x)):
+            x = models_x[i]
+            y = models_y[i]
+            std = stds[i]
+            plt.fill_between(x, y+std, y-std, facecolor=colors[i], alpha=0.2)
+
+    # else:
+    #     size = final_df['size'].reset_index(drop=True)[0]
+    #     fig = plt.gcf()
+    #     # fig_size = fig.get_size_inches() * fig.dpi
+    #     fig_size = fig.get_size_inches()
+    #     plt.text(fig_size[0]/2, fig_size[1]/2, str(size), verticalalignment='top', horizontalalignment='center')
+
+    delimiter = '_'
+    if save_user_id == '':
+        delimiter = ''
+    file_name = 'average_plot_%s%s%s' % (user_type, delimiter, save_user_id)
+
+    if simple_plots:
+        plt.axis('off')
+        plt.savefig(results_dir + '\\' + file_name + '.png', bbox_inches=0)
+    else:
+        plt.savefig(results_dir + '\\'+file_name+'.png')
     plt.show()
-    # plt.clf()
-    
+    plt.clf()
+
 
 def sort_by(col):
     path_in = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific_encoded.csv'
@@ -745,17 +797,16 @@ def make_genres_count_column():
         #             writer.writerow([name])
 
 
-def merge_csvs():
-    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
-    # versions = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-    #             'native-country']
-    versions = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex']
+def merge_all_user_csvs():
+    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\80 split\\'
+    user_types = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+
     df_log_merged = None
     df_hybrid_merged = None
-    for version in versions:
-        version_dir = 'by user type\\' + version + '\\'
-        log_path = dataset + version_dir + 'log.csv'
-        hybrid_log_path = dataset + version_dir + 'hybrid_log.csv'
+    for user_type in user_types:
+        user_type_dir = user_type + '\\'
+        log_path = dataset + user_type_dir + 'log.csv'
+        hybrid_log_path = dataset + user_type_dir + 'hybrid_log.csv'
 
         df_log = pd.read_csv(log_path)
         df_hybrid = pd.read_csv(hybrid_log_path)
@@ -767,15 +818,106 @@ def merge_csvs():
         df_log_merged = df_log_merged.append(df_log)
         df_hybrid_merged = df_hybrid_merged.append(df_hybrid)
 
-    df_log_merged.to_csv(dataset + '\\all\\log.csv')
-    df_hybrid_merged.to_csv(dataset + '\\all\\hybrid_log.csv')
+    df_log_merged.to_csv(dataset + '\\all\\log.csv', index=False)
+    df_hybrid_merged.to_csv(dataset + '\\all\\hybrid_log.csv', index=False)
 
+
+def merge_csv_parts(path, user_types):
+
+    for user_type in user_types:
+        user_type_dir = '%s\\%s' % (path, user_type)
+        safe_make_dir(user_type_dir)
+        df_log_merged = None
+        df_hybrid_merged = None
+
+        i = 1
+        done = False
+        while not done:
+            part = 'part %d' % i
+            i += 1
+            try:
+                log_path = '%s %s\\%s\\log.csv' % (path, part, user_type)
+                hybrid_log_path = '%s %s\\%s\\hybrid_log.csv' % (path, part, user_type)
+
+                df_log = pd.read_csv(log_path)
+                df_hybrid = pd.read_csv(hybrid_log_path)
+
+                if df_log_merged is None:
+                    df_log_merged = pd.DataFrame(columns=df_log.columns)
+                    df_hybrid_merged = pd.DataFrame(columns=df_hybrid.columns)
+
+                df_log_merged = df_log_merged.append(df_log)
+                df_hybrid_merged = df_hybrid_merged.append(df_hybrid)
+            except FileNotFoundError:
+                done = True
+
+        df_log_merged.to_csv('%s\\log.csv' % (user_type_dir), index=False)
+        df_hybrid_merged.to_csv('%s\\hybrid_log.csv' % (user_type_dir), index=False)
+
+
+def split_users(log_path, hybrid_log_path, results_dir):
+    df_log = pd.read_csv(log_path)
+    df_hybrid_log = pd.read_csv(hybrid_log_path)
+    log_by_users = df_log.groupby('user_id')
+    hybrid_log_by_users = df_hybrid_log.groupby('user_id')
+
+    for user_id, data in log_by_users:
+        data.to_csv(results_dir + '%s_log.csv' % user_id)
+    for user_id, data in hybrid_log_by_users:
+        data.to_csv(results_dir + '%s_hybrid_log.csv' % user_id)
+
+
+def safe_make_dir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
+def create_age_class_col():
+    path_in = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\titanic\\titanic.csv'
+    path_out = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\titanic\\titanic2.csv'
+    df = pd.read_csv(path_in).fillna(value={'Age': 30})
+    col = []
+    age_classes = ['from 0 to 10', 'from 11 to 20', 'from 21 to 30', 'from 31 to 40', 'from 41 to 50', 'from 51 to 60',
+                   'from 61 to 70', 'from 71 to 80']
+    for i in df['Age']:
+        if 0 <= i <= 10:
+            j = 0
+        if 11 <= i <= 20:
+            j = 1
+        if 21 <= i <= 30:
+            j = 2
+        if 31 <= i <= 40:
+            j = 3
+        if 41 <= i <= 50:
+            j = 4
+        if 51 <= i <= 60:
+            j = 5
+        if 61 <= i <= 70:
+            j = 6
+        if 71 <= i <= 80:
+            j = 7
+        col += [age_classes[j]]
+
+    df['age_class'] = col
+    df.to_csv(path_out)
+
+
+def drop_rows_with_string():
+    path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\breastCancer\\breastCancer'
+    with open(path + ".csv", 'r', newline='') as file_in:
+        with open(path + "_fixed.csv", 'w', newline='') as file_out:
+            for line in file_in.readlines():
+                if not '?' in line:
+                    file_out.write(line)
+
+
+# drop_rows_with_string()
+# exit()
 
 # def helping_kobi():
 #     encoded = '╫£╫ס╫ש╫נ ╫נ╫ש╫á╫ר╫ע╫¿╫ª╫ש╫פ ╫ץ╫á╫ש╫¬╫ץ╫ק ╫₧╫ó╫¿╫¢╫ץ╫¬ ╫ס╫ó"╫₧'
 #     decoded = 'חברת החשמל לישראל בעמ'
 #     print(string)
-
 
 plot = False
 if plot:
@@ -786,34 +928,71 @@ if plot:
 
     log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\merged_log.csv'
     hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_stat_log.csv'
-    hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_nn_log.csv'
+    hybrid_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_nn_log.csv'
     L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\L1_log.csv'
     plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee'
 
     if not os.path.exists(plots_dir+'\\plots'):
         os.makedirs(plots_dir+'\\plots')
 
-    area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_dir, skip_L_models=True)
+    area_calculator(log_path, hybrid_stat_log_path, hybrid_log_path, plots_dir, skip_L_models=True)
     # area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_dir, L1_log_path, only_L1=True, cut_by_min=True)
 
 avg = True
 if avg:
-    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
-    # versions = ['all']
-    # versions = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-    experiment = '5-fold cross validation\\'
-    versions = ['marital-status']
+    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
+    # version = '80 split\\'
+    # # user_types = ['all']
+    # user_types = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 
-    for version in versions:
-        version_dir = experiment + version + '\\'
-        # version_dir = 'by user type\\' + version + '\\'
-        log_path = dataset + version_dir + 'log.csv'
-        L1_log_path = dataset + version_dir + 'log.csv'
-        hybrid_stat_log_path = dataset + version_dir + 'hybrid_log.csv'
-        hybrid_nn_log_path = dataset + version_dir + 'hybrid_log.csv'
-        results_dir = dataset + experiment + 'all\\'
+    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
+    # version = '80 split [10] h1 500 h2 200 epochs\\'
+    # user_types = ['race']
+    # # user_types = ['race', 'sex', 'age_cat', 'c_charge_degree', 'score_text']
 
-        plots_averaged_over_all_users(log_path, hybrid_nn_log_path, results_dir, user_type=version)
+    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic\\'
+    # version = '80 split [] epochs h1 500 h2 800\\'
+    # user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
+
+    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\assistment\\'
+    version = '80 split [50]\\'
+    user_types = ['user_id']
+
+    individual_users = True
+    only_split_users = False
+
+    for user_type in user_types:
+        user_type_dir = dataset + version + user_type + '\\'
+        log_path = user_type_dir + 'log.csv'
+        hybrid_log_path = user_type_dir + 'hybrid_log.csv'
+
+        if only_split_users:
+            by_user_id_dir = '%s\\log_by_user\\' % user_type_dir
+            safe_make_dir(by_user_id_dir)
+            split_users(log_path, hybrid_log_path, by_user_id_dir)
+            continue
+
+        if not individual_users:
+            results_dir = dataset + version + 'averaged plots\\by user type'
+            safe_make_dir(results_dir)
+            plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
+                                          user_type=user_type)
+        else:
+            results_dir = dataset + version + 'averaged plots\\by user\\%s' % user_type
+            safe_make_dir(results_dir)
+            user_ids = pd.unique(pd.read_csv(log_path)['user_id'])
+            for user_id in user_ids:
+                user_log_path = '%slog_by_user\\%s_log.csv' % (user_type_dir, user_id)
+                user_hybrid_log_path = '%slog_by_user\\%s_hybrid_log.csv' % (user_type_dir, user_id)
+                plots_averaged_over_all_users(user_log_path, user_hybrid_log_path, results_dir,
+                                              user_type=user_type, save_user_id=user_id, weighted=False,
+                                              simple_plots=True)
+
+# dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic\\'
+# version = '80 split [] epochs h1 500 h2 800'
+# user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
+#
+# merge_csv_parts(dataset+version, user_types)
 
 # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
     # L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'

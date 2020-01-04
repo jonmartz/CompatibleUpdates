@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import sklearn.metrics
 from sklearn.metrics import auc
-# import tensorflow as tf
 import tensorflow as tf
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.preprocessing import MinMaxScaler
@@ -69,35 +68,57 @@ def plot_confusion_matrix(predicted, true, title, path):
     # sn.reset_orig()
 
 
+def get_weights(weights, col_groups_dict, seed):
+    cols = []
+    mean_weights = []
+    for col_name, group in col_groups_dict.items():
+        cols += [col_name]
+        max_weight = weights[group].max()
+        min_weight = weights[group].min()
+        if abs(max_weight) > abs(min_weight):
+            mean_weights += [max_weight]
+        else:
+            mean_weights += [min_weight]
+        # mean_weights += [weights[group].mean()]
+    return pd.DataFrame({'seed': seed, 'col': cols, 'weight': mean_weights})
+
+
 # Data-set paths
 
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\creditRiskAssessment\\heloc_dataset_v1.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\creditRiskAssessment.csv"
 # target_col = 'RiskPerformance'
-# dataset_fraction = 0.5
-# threshold = 75
-# users = {'1': df[:100].loc[df['ExternalRiskEstimate'] > threshold]}.items()
 
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\hospitalMortalityPrediction\\ADMISSIONS_encoded.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\hospitalMortalityPrediction.csv"
 # target_col = 'HOSPITAL_EXPIRE_FLAG'
 
-# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\recividismPrediction\\compas-scores-two-years_encoded.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividismPrediction.csv"
+# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\recividism\\recividism.csv'
+# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism"
 # target_col = 'is_recid'
+# original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text']
+# user_categs = ['race', 'sex', 'age_cat', 'c_charge_degree', 'score_text']
+# skip_cols = ['c_charge_desc', 'priors_count']
+# # skip_cols = ['c_charge_desc', 'age_cat', 'juv_fel_count', 'juv_misd_count', 'juv_other_count', 'score_text', 'decile_score']
+# df_max_size = -1
+# layers = []
 
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\fraudDetection\\transactions.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\fraudDetection.csv"
 # target_col = 'isFraud'
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\e-learning\\e-learning.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\e-learning"
-# target_col = 'correct'
-# categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-# user_group_names = ['user_id']
-# skip_cols = []
-# df_max_size = 100000
-# layers = [100]
+dataset = 'assistment'
+target_col = 'correct'
+original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+user_categs = ['user_id']
+skip_cols = []
+layers = [50]
+df_max_size = 100000
+history_train_fraction = 0.8
+h1_train_size = 200
+h2_train_size = 5000
+h1_epochs = 600
+h2_epochs = 400
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
@@ -117,13 +138,18 @@ def plot_confusion_matrix(predicted, true, title, path):
 # # skip_cols = ['Animation', 'Comedy', 'Family', 'Adventure', 'Fantasy', 'Romance', 'Drama', 'Action', 'Crime', 'Thriller',
 # #              'Horror', 'History', 'Science Fiction', 'Mystery', 'War', 'Foreign', 'Music', 'Documentary', 'Western', 'TV Movie']
 
-full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
-results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries"
-target_col = 'salary'
-original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-skip_cols = []
-df_max_size = -1
-layers = []
+# dataset = "salaries"
+# target_col = 'salary'
+# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# user_categs = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# skip_cols = []
+# df_max_size = -1
+# layers = []
+# history_train_fraction = 0.8
+# h1_train_size = 200
+# h2_train_size = 5000
+# h1_epochs = 500
+# h2_epochs = 200
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\abalone\\abalone.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\abalone"
@@ -133,21 +159,42 @@ layers = []
 
 # selecting experiment parameters
 
-history_train_fraction = 0.5
-h1_train_size = 200
-h2_train_size = 5000
-test_size = int(h2_train_size * history_train_fraction)
+# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\titanic\\titanic.csv'
+# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic"
+# target_col = 'Survived'
+# original_categ_cols = ['Sex', 'Embarked', 'AgeClass']
+# user_categs = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
+# skip_cols = []
+# layers = []
+# df_max_size = -1
+# history_train_fraction = 0.8
+# h1_train_size = 15
+# h2_train_size = 500
+# h1_epochs = 500
+# h2_epochs = 800
 
-h1_epochs = 500
-h2_epochs = 200
+# dataset = 'breastCancer'
+# target_col = 'is_malign'
+# original_categ_cols = []
+# user_categs = ['uniformity_of_size']
+# skip_cols = []
+# layers = []
+# df_max_size = -1
+# history_train_fraction = 0.8
+# h1_train_size = 200
+# h2_train_size = 200
+# h1_epochs = 200
+# h2_epochs = 200
 
+test_size = int(h2_train_size * (1-history_train_fraction))
 batch_size = 128
 regularization = 0
 
-seeds = range(5)
+seeds = range(3)
 # seeds = [0]
 
-diss_count = 10
+# noinspection PyUnboundLocalVariable
+diss_count = 5
 normalize_diss_weight = True
 if normalize_diss_weight:
     diss_weights = [(i + i / (diss_count - 1)) / diss_count for i in range(diss_count)]
@@ -156,22 +203,17 @@ else:
     diss_weights = range(diss_count)
     diss_multiply_factor = 1.0
 
-
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
-min_history_size = 100
+min_history_size = 200
 max_history_size = 100000
-current_user_count = 0
-user_max_count = 30
-
-# only_L1 = True
-# only_hybrid = False
-# # hybrid_method = 'stat'
-hybrid_method = 'nn'
+current_user_count = 7
+user_max_count = -1
 
 model_names = ['no hist', 'L3', 'hybrid']
 colors = ['k', 'r', 'g']
+hybrid_method = 'nn'
 
 split_by_chronological_order = False
 copy_h1_weights = False
@@ -180,21 +222,36 @@ plot_confusion = False
 get_area = True
 
 only_train_h1 = False
-
+only_h2_weights = False
 show_plots = True
 
-# if only_hybrid:
-#     diss_weights = [0]
+# skip cols
+user_categs_not_skipped = []
+for categ in user_categs:
+    if categ not in skip_cols:
+        user_categs_not_skipped += [categ]
 
-# if True:
+original_categs_not_skipped = []
 for categ in original_categ_cols:
-    if categ not in ['marital-status']:
-        continue
-    user_group_names = [categ]
-    categ_cols = original_categ_cols.copy()
-    categ_cols.remove(categ)
+    if categ not in skip_cols:
+        original_categs_not_skipped += [categ]
 
-    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots\\'+categ
+user_categs = user_categs_not_skipped
+original_categ_cols = original_categs_not_skipped
+
+full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' % (dataset, dataset)
+results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s" % dataset
+
+for user_categ in user_categs:
+
+    user_group_names = [user_categ]
+    categ_cols = original_categ_cols.copy()
+    try:
+        categ_cols.remove(user_categ)
+    except ValueError:
+        pass
+
+    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots\\' + user_categ
     if os.path.exists(plots_dir):
         shutil.rmtree(plots_dir)
     else:
@@ -231,11 +288,23 @@ for categ in original_categ_cols:
         except:
             pass
 
+    # get column groups in ohe df for each column in original df
+    col_groups_dict = {}
+    categs_unique_values = df_full[categ_cols].nunique()
+    i = 0
+    for col in df_full.columns:
+        if col in [user_categ, target_col]:
+            continue
+        unique_count = 1
+        if col in categ_cols:
+            unique_count = categs_unique_values[col]
+        col_groups_dict[col] = range(i, i + unique_count)
+        i = i + unique_count
+
     # one hot encoding
     print('pre-processing data... ')
     ohe = ce.OneHotEncoder(cols=categ_cols, use_cat_names=True)
     df_full = ohe.fit_transform(df_full)
-    # df_balanced = ohe.transform(df_balanced)
     print('num columns = %d'%df_full.shape[1])
 
     print('splitting into train and test sets...')
@@ -265,15 +334,11 @@ for categ in original_categ_cols:
     # balance sets
     print('balancing train set...')
 
-    target_group = df_train.groupby(target_col)
-    df_train = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
-    df_train = df_train.reset_index(drop=True)
-
     if balance_histories:
 
-        # target_group = df_train.groupby(target_col)
-        # df_train = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
-        # df_train = df_train.reset_index(drop=True)
+        target_group = df_train.groupby(target_col)
+        df_train = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
+        df_train = df_train.reset_index(drop=True)
 
         target_group = df_test.groupby(target_col)
         df_test = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
@@ -284,6 +349,7 @@ for categ in original_categ_cols:
     Ys_by_seed = []
     h1s_by_seed = []
     h2s_not_using_history_by_seed = []
+    df_weights = pd.DataFrame(columns=['seed', 'col', 'weight'])
 
     tests_group = {}
     tests_group_user_ids = []
@@ -291,11 +357,11 @@ for categ in original_categ_cols:
     if only_train_h1:
         print('\nusing cross validation\n')
         train_sizes = [200, 5000]
-        # train_sizes = [i * 100 for i in range(2, 11)]
-        h1_epochs = 600
-        seeds = range(1)
+        # train_sizes = [5000]
+        h1_epochs = 400
+        seeds = range(2)
         n_features = int(df_train.shape[1])-1
-        layers = []
+        layers = [50]
         # layers = [int(n_features/2)]
         # layers = [90, 40]
         regularization = 0
@@ -311,14 +377,18 @@ for categ in original_categ_cols:
         train_accuracies = pd.DataFrame()
         test_accuracies = pd.DataFrame()
 
-        start_time = int(round(time.time() * 1000))
-
         for seed in seeds:
-            print('---\nSETTING TRAIN SEED '+str(seed)+'...\n---\n')
+            print('--------------------\n'
+                  'SETTING TRAIN SEED %d\n'
+                  '--------------------\n' % seed)
+            start_time = int(round(time.time() * 1000))
+
             if not only_train_h1:
                 df_train_subset = df_train.sample(n=h2_train_size, random_state=seed)
+                # df_train_subset = df_train.sample(n=min(h2_train_size, len(df_train)), random_state=seed)
             else:
                 df_train_subset = df_train.sample(n=h2_train_size, random_state=seed).reset_index(drop=True)
+                # df_train_subset = df_train.sample(n=min(h2_train_size, len(df_train)), random_state=seed).reset_index(drop=True)
                 # df_train_subset = df_train.sample(n=h2_train_size, random_state=0).reset_index(drop=True)
                 test_size = h2_train_size - h1_train_size
                 test_range = range(test_size)
@@ -331,6 +401,7 @@ for categ in original_categ_cols:
 
             # tests_group[str(seed)] = df_train_subset
             tests_group[str(seed)] = df_test.sample(n=test_size, random_state=seed)
+            # tests_group[str(seed)] = df_test.sample(n=min(test_size, len(df_test)), random_state=seed)
             tests_group_user_ids += [str(seed)]
 
             X = df_train_subset.loc[:, df_train_subset.columns != target_col]
@@ -344,18 +415,22 @@ for categ in original_categ_cols:
             Xs_by_seed += [X]
             Ys_by_seed += [Y]
 
-            h1 = Models.NeuralNetwork(X, Y, h1_train_size, h1_epochs, batch_size, layers, 0.02,
-                               weights_seed=1, plot_train=True, regularization=regularization)
+            if not only_h2_weights:
+                h1 = Models.NeuralNetwork(X, Y, h1_train_size, h1_epochs, batch_size, layers, 0.02,
+                                   weights_seed=1, plot_train=True, regularization=regularization)
+                h1s_by_seed += [h1]
+
+                train_accuracies[seed] = h1.plot_train_accuracy
+                test_accuracies[seed] = h1.plot_test_accuracy
+            else:
+                h1 = Models.NeuralNetwork(X, Y, h1_train_size, 2, batch_size, layers, 0.02,
+                                          weights_seed=1, plot_train=True, regularization=regularization)
             tf.reset_default_graph()
-            h1s_by_seed += [h1]
-
-            train_accuracies[seed] = h1.plot_train_accuracy
-            test_accuracies[seed] = h1.plot_test_accuracy
-
             if not only_train_h1:
                 print("training h2s not using history...")
                 h2s_not_using_history = []
-                first_diss = True
+                # first_diss = True
+                first_diss_weight = True
                 for diss_weight in diss_weights:
                     print('dissonance weight ' + str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
 
@@ -363,36 +438,56 @@ for categ in original_categ_cols:
                     #     h2s_not_using_history += [h2s_not_using_history[0]]
                     #     continue
 
-                    h2s_not_using_history += [Models.NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
-                                                                   diss_weight, h1, 'D', make_h1_subset=False,
-                                                                   test_model=False,
-                                                                   copy_h1_weights=copy_h1_weights, weights_seed=2,
-                                                                   normalize_diss_weight=normalize_diss_weight)]
+                    h2 = Models.NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
+                                              diss_weight, h1, 'D', make_h1_subset=False,
+                                              test_model=False,
+                                              copy_h1_weights=copy_h1_weights, weights_seed=2,
+                                              normalize_diss_weight=normalize_diss_weight)
                     tf.reset_default_graph()
-                    first_diss = False
+                    h2s_not_using_history += [h2]
+
+                    if first_diss_weight:
+                        first_diss_weight = False
+                        df_weights = df_weights.append(get_weights(h2.final_weights[0], col_groups_dict, seed))
+                    if only_h2_weights:
+                        break
+
                 h2s_not_using_history_by_seed += [h2s_not_using_history]
 
-        if show_plots:
-            plot_x = list(range(h1_epochs))
-            plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
-            plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
-            plt.xlabel('epoch')
-            plt.ylabel('accuracy')
-            plt.legend()
-            plt.grid()
-            if only_train_h1:
-                plt.ylim(bottom, top)
-            runtime = int((round(time.time() * 1000)) - start_time) / 60000
-            plt.title('seed='+str(seed)+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
-                      ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
-                      + ' reg=' + str(regularization))
-            plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
-            if show_plots:
-                plt.show()
-            plt.clf()
+            if not only_h2_weights:
+                plot_x = list(range(h1_epochs))
+                plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
+                plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
+                plt.xlabel('epoch')
+                plt.ylabel('accuracy')
+                plt.legend()
+                plt.grid()
+                if only_train_h1:
+                    plt.ylim(bottom, top)
+                runtime = int((round(time.time() * 1000)) - start_time) / 60000
+                plt.title('seed='+str(seed)+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
+                          ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
+                          + ' reg=' + str(regularization))
+                plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
+                if show_plots:
+                    plt.show()
+
+                    if only_train_h1:
+                        h1_weights = get_weights(h1.final_weights[0], col_groups_dict, seed)
+                        plt.bar(h1_weights['col'], h1_weights['weight'])
+                        plt.grid(axis='y')
+                        plt.xticks(rotation=30)
+                        plt.show()
+                plt.clf()
+
+
+    df_weights.to_csv('%s\\weights.csv' % plots_dir, index=False)
 
     if only_train_h1:
         exit()
+
+    if only_h2_weights:
+        continue
 
     del df_train
     del df_test
@@ -531,11 +626,11 @@ for categ in original_categ_cols:
                                     result = h2s_not_using_history[0].hybrid_test(history_test_y, weight)
                                 else:
                                     print('weight ' + str(j + 1) + "/" + str(len(weights)))
-                                    tf.reset_default_graph()
                                     h2 = Models.NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, weight, h1, 'D',
                                                               history=history, use_history=True, model_type=model_name, test_model=False,
                                                               copy_h1_weights=copy_h1_weights, weights_seed=2,
                                                               normalize_diss_weight=normalize_diss_weight)
+                                    tf.reset_default_graph()
                                     result = h2.test(history_test_x, history_test_y, h1)
 
                             model_x += [result['compatibility']]
@@ -572,8 +667,17 @@ for categ in original_categ_cols:
                     h1_y = [h1_acc, h1_acc]
                     plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
 
+                    markersize_delta = 2
+                    linewidth_delta = 1
+
+                    markersize = 8+markersize_delta*(len(model_names)-1)
+                    linewidth = 2+linewidth_delta*(len(model_names)-1)
+
                     for i in range(len(model_names)):
-                        plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=model_names[i])
+                        plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=model_names[i],
+                                 markersize=markersize, linewidth=linewidth)
+                        markersize -= markersize_delta
+                        linewidth -= linewidth_delta
 
                     plt.xlabel('compatibility')
                     plt.ylabel('accuracy')
@@ -591,6 +695,7 @@ for categ in original_categ_cols:
 
                     # write log
                     hybrid_idx = model_names.index('hybrid')
+
                     with open(plots_dir + '\\log.csv', 'a', newline='') as file_out:
                         writer = csv.writer(file_out)
                         for i in range(len(diss_weights)):

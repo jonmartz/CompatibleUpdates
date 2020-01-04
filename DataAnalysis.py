@@ -362,31 +362,68 @@ def history_split_correlation_all_student_pairs():
             writer.writerows(rows)
 
 
-def cross_analyze_features(dataset_path, result_path, original_categ_cols, target_col, avg_plots_path):
-    # # df = sns.load_dataset('iris')
-    # df = pd.read_csv(dataset_path)[:100]
-    #
-    # # plt.figure(figsize=(10, 8), dpi=80)
-    # sns.pairplot(df, kind="reg", hue="salary")
-    # plt.show()
+def normalize(series, new_min, new_max):
+    min = series.min()
+    max = series.max()
+    return pd.Series([(i - min) * (new_max - new_min) / (max - min) + new_min for i in series],
+                     index=series.index)
 
-    df_original = pd.read_csv(dataset_path)
+
+def dont_start_with_number(names):
+    for i in range(len(names)):
+        name = names[i]
+        delimiter = ''
+        if '+' in name:
+            delimiter = '+'
+        elif '-' in name:
+            delimiter = '-'
+        if delimiter != '':
+            first = name.split(delimiter)[0].strip()
+            try:
+                float(first)
+                names[i] = 'from '+name
+            except ValueError:
+                pass
+
+
+def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_cols, skip_cols,
+                           target_col, avg_plots_path, logs_path, weights_path):
+
+    df_original = pd.read_csv(dataset_path).drop(columns=skip_cols)
     alpha = 0.5
     all_color = 'blue'
+    scale = 2
 
     users_count = 1
-    for user_col in original_categ_cols:
+    for user_col in user_cols:
         print('%d/%d '%(users_count, len(original_categ_cols)) + user_col)
         categ_cols = original_categ_cols.copy()
-        categ_cols.remove(user_col)
+        try:
+            categ_cols.remove(user_col)
+        except ValueError:
+            pass
+
+        hist_lens = pd.read_csv('%s\\%s\\log.csv' % (logs_path, user_col))
+        hist_lens = hist_lens.groupby('user_id').mean()['instances']
+
+        weights = pd.read_csv('%s\\%s\\weights.csv' % (weights_path, user_col))
+        weights = weights.groupby('col').abs().mean()['weight']
+
+        weights_alpha = normalize(weights.abs(), 0, 0.5)
 
         user_groups = df_original.groupby(user_col)
-        user_ids = list(user_groups.groups.keys())
+        all_user_ids = list(user_groups.groups.keys())
+        user_ids = []
+        for id in all_user_ids:
+            if id in hist_lens.index:
+                user_ids += [id]
 
         rows = len(user_ids)
         cols = len(df_original.columns)
-        fig, axs = plt.subplots(rows, cols, sharex='col', figsize=(cols*3, rows*3))
-        fig.suptitle(user_col + ' as users', fontsize='50')
+        fig, axs = plt.subplots(rows, cols, sharex='col', figsize=(cols*scale, rows*scale))
+        # fig.suptitle(user_col + ' as users')
+
+        # fig.patch.set_facecolor('green')
 
         all_bins = []
         for all in [True, False]:
@@ -397,7 +434,7 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, targe
                 user_id = user_ids[i]
                 df = user_groups.get_group(user_id)
                 if not all:
-                    print('\t'+user_id)
+                    print('\t'+str(user_id))
                 for j in range(len(df.columns)):
                     col = df.columns[j]
                     if not all:
@@ -408,14 +445,24 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, targe
                         df = df_original
                     else:
                         if i == 0:
-                            ax.set_title(col)
+                            if col == user_col:
+                                ax.set_title('%s\nplot\n' % col)
+                            elif col == target_col:
+                                ax.set_title('%s\n' % col, color='red')
+                            else:
+                                ax.set_title('%s\nw = %.4f' % (col, weights[col]))
                         if j == 0:
-                            ax.set_ylabel(user_id)
+                            try:
+                                hist_len = str(hist_lens[user_id])
+                            except KeyError:
+                                hist_len = '?'
+                            ax.set_ylabel('%s\nn = %s' % (user_id, hist_len))
 
                     if col == user_col:
                         if not all:
                             try:
-                                image_file = '%s\\%s\\by_user_id\\%s_%s.png'%(avg_plots_path, user_col, user_col, user_id)
+                                image_file = '%s\\%s\\average_plot_%s_%s.png' % (avg_plots_path, user_col,
+                                                                                 user_col, user_id)
                                 image = plt.imread(image_file)
                                 ax.imshow(image)
                             except:
@@ -427,13 +474,18 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, targe
                     plt.setp(ax.get_yticklabels(), visible=False)
                     ax.tick_params(axis='both', which='both', length=0)
 
+                    if col != target_col:
+                        ax.patch.set_facecolor('green')
+                        ax.patch.set_alpha(weights_alpha[col])
+
                     color = 'red'
                     if all:
                         color = all_color
                     if col in categ_cols or col == target_col:
                         counts = df[col].value_counts()
-                        names = list(counts.index)
-                        counts = counts / counts.sum()
+                        names = [str(i) for i in list(counts.index)]
+                        dont_start_with_number(names)
+                        counts = list(counts / counts.sum())
                         ax.bar(names, counts, color=color, alpha=alpha)
                     else:
                         if all:
@@ -448,7 +500,7 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, targe
                         y = counts / counts.sum()
                         ax.fill_between(x, 0, y, color=color, alpha=alpha)
 
-        plt.savefig(result_path + '\\' + user_col + ' as users')
+        plt.savefig(result_path + '\\' + user_col + ' as users', bbox_inches='tight')
 
 
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific.csv'
@@ -474,10 +526,38 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, targe
 # user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\moviesKaggle\\analysis\\users'
 # # categ_cols = ['original_language', 'rating']
 
-dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\salaries.csv'
-result_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\salaries\\analysis\\cross analysis'
-categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-target_col = 'salary'
+# dataset = 'salaries'
+# version = '80 split'
+# categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# target_col = 'salary'
+
+# dataset = 'recividism'
+# version = '80 split [] h1 500 h2 300 epochs'
+# categ_cols = ['race', 'sex', 'age_cat', 'c_charge_degree', 'score_text']
+# user_cols = ['race', 'sex', 'age_cat']
+# skip_cols = ['c_charge_desc']
+# target_col = 'is_recid'
+
+# dataset = 'titanic'
+# version = '80 split [] epochs h1 500 h2 800'
+# categ_cols = ['Sex', 'Embarked', 'AgeClass']
+# user_cols = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
+# skip_cols = []
+# target_col = 'Survived'
+
+dataset = 'assistment'
+version = '80 split [50]'
+categ_cols = ['Sex', 'Embarked', 'AgeClass']
+user_cols = ['user_id']
+skip_cols = []
+target_col = 'correct'
+
+
+dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' % (dataset, dataset)
+avg_plots_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s\\averaged plots\\by user' % (dataset, version)
+logs_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s' % (dataset, version)
+weights_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s' % (dataset, version)
+result_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s\\cross analysis' % (dataset, version)
 
 if not os.path.exists(result_path):
     os.makedirs(result_path)
@@ -486,10 +566,8 @@ if not os.path.exists(result_path):
 # for user_col in user_cols:
 #     analyze_histories(dataset_path, user_directory, user_col)
 
-avg_plots_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\history sizes from 400 to 10000\\by user type'
-target_col = 'salary'
-
-cross_analyze_features(dataset_path, result_path, categ_cols, target_col, avg_plots_path)
+cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_cols,
+                       target_col, avg_plots_path, logs_path, weights_path)
 
 # image_file = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\history sizes from 400 to 10000\\by user type\\workclass\\by_user_id\\workclass_Federal-gov.png'
 #

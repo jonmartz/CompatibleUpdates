@@ -434,8 +434,8 @@ class NeuralNetwork:
                                            likelihood: likelihood_test})
 
                     self.compatibility = com
-                    # self.auc = sklearn.metrics.roc_auc_score(Y_test, out)
-                    self.accuracy = acc
+                    self.accuracy = sklearn.metrics.roc_auc_score(Y_test, out)
+                    # self.accuracy = acc
                     self.new_correct = new_correct
                     self.old_correct = Y_test_old_correct
 
@@ -575,7 +575,6 @@ class History:
         div = np.add(sqr_diff, self.vars)
         attribute_likelihoods = np.divide(self.vars, div) * magnitude_multiplier
 
-        # todo: experimenting with likelihood here
         # merge the likelihood of all attributes
         if weights is None:
             self.likelihood = np.mean(attribute_likelihoods, axis=1)
