@@ -194,36 +194,45 @@ seeds = range(3)
 # seeds = [0]
 
 # noinspection PyUnboundLocalVariable
-diss_count = 5
+
+# diss_count = 5
 normalize_diss_weight = True
-if normalize_diss_weight:
-    diss_weights = [(i + i / (diss_count - 1)) / diss_count for i in range(diss_count)]
-    diss_multiply_factor = 1
-else:
-    diss_weights = range(diss_count)
-    diss_multiply_factor = 1.0
+# if normalize_diss_weight:
+#     diss_weights = [(i + i / (diss_count - 1)) / diss_count for i in range(diss_count)]
+#     diss_multiply_factor = 1
+# else:
+#     diss_weights = range(diss_count)
+#     diss_multiply_factor = 1.0
+
+diss_weights = [0.01, 0.02, 0.03, 0.04, 0.05]
 
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
 min_history_size = 200
 max_history_size = 100000
-current_user_count = 7
-user_max_count = -1
+current_user_count = 0
+user_max_count = 15
 
-model_names = ['no hist', 'L3', 'hybrid']
-colors = ['k', 'r', 'g']
+model_names = [
+    'no hist',
+    'L3'
+    # 'hybrid'
+]
+colors = {'no hist': 'k', 'L3': 'r', 'hybrid': 'g'}
 hybrid_method = 'nn'
 
 split_by_chronological_order = False
 copy_h1_weights = False
 balance_histories = True
+
+make_plots = True
+show_plots = True
+compute_area = False
 plot_confusion = False
-get_area = True
 
 only_train_h1 = False
 only_h2_weights = False
-show_plots = True
 
 # skip cols
 user_categs_not_skipped = []
@@ -454,7 +463,7 @@ for user_categ in user_categs:
 
                 h2s_not_using_history_by_seed += [h2s_not_using_history]
 
-            if not only_h2_weights:
+            if make_plots and not only_h2_weights:
                 plot_x = list(range(h1_epochs))
                 plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
                 plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
@@ -647,7 +656,7 @@ for user_categ in user_categs:
                     max_x = max(max(i) for i in models_x)
                     max_y = max(max(i) for i in models_y)
 
-                    if get_area:
+                    if compute_area:
                         mono_xs = [i.copy() for i in models_x]
                         mono_ys = [i.copy() for i in models_y]
 
@@ -658,43 +667,49 @@ for user_categ in user_categs:
                         
                         areas = [auc([min_x] + mono_xs[i] + [1], [mono_ys[i][0]] + mono_ys[i] + [h1_acc]) - h1_area
                                  for i in range(len(mono_xs))]
+
+                    if make_plots:
                         
-                    com_range = max_x - min_x
-                    auc_range = max_y - min_y
+                        com_range = max_x - min_x
+                        auc_range = max_y - min_y
 
-                    # plotting
-                    h1_x = [min_x, max_x]
-                    h1_y = [h1_acc, h1_acc]
-                    plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+                        # plotting
+                        h1_x = [min_x, max_x]
+                        h1_y = [h1_acc, h1_acc]
+                        plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
 
-                    markersize_delta = 2
-                    linewidth_delta = 1
+                        markersize_delta = 2
+                        linewidth_delta = 1
 
-                    markersize = 8+markersize_delta*(len(model_names)-1)
-                    linewidth = 2+linewidth_delta*(len(model_names)-1)
+                        markersize = 8+markersize_delta*(len(model_names)-1)
+                        linewidth = 2+linewidth_delta*(len(model_names)-1)
 
-                    for i in range(len(model_names)):
-                        plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=model_names[i],
-                                 markersize=markersize, linewidth=linewidth)
-                        markersize -= markersize_delta
-                        linewidth -= linewidth_delta
+                        for i in range(len(model_names)):
+                            model_name = model_names[i]
+                            plt.plot(models_x[i], models_y[i], colors[model_name], marker='.', label=model_name,
+                                     markersize=markersize, linewidth=linewidth)
+                            markersize -= markersize_delta
+                            linewidth -= linewidth_delta
 
-                    plt.xlabel('compatibility')
-                    plt.ylabel('accuracy')
-                    plt.grid()
-                    plt.legend()
-                    title = 'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' \
-                            + str(history_train_fraction) + ' seed=' + str(seed)
-                    plt.title(title)
-                    plt.savefig(plots_dir+'\\by_user_id\\'+user_group_name+'_'+str(user_id)+'_seed_'+str(seed)+'.png')
+                        plt.xlabel('compatibility')
+                        plt.ylabel('accuracy')
+                        plt.grid()
+                        plt.legend()
+                        title = 'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' \
+                                + str(history_train_fraction) + ' seed=' + str(seed)
+                        plt.title(title)
+                        plt.savefig(plots_dir+'\\by_user_id\\'+user_group_name+'_'+str(user_id)+'_seed_'+str(seed)+'.png')
 
-                    if plot_confusion:
-                        plt.savefig(confusion_dir + '\\plot.png')
-                    if show_plots:
-                        plt.show()
+                        if plot_confusion:
+                            plt.savefig(confusion_dir + '\\plot.png')
+                        if show_plots:
+                            plt.show()
 
                     # write log
-                    hybrid_idx = model_names.index('hybrid')
+                    if 'hybrid' in model_names:
+                        hybrid_idx = model_names.index('hybrid')
+                    else:
+                        hybrid_idx = -1
 
                     with open(plots_dir + '\\log.csv', 'a', newline='') as file_out:
                         writer = csv.writer(file_out)
@@ -708,12 +723,13 @@ for user_categ in user_categs:
                                 row += [models_y[j][i]]
                             writer.writerow(row)
 
-                    with open(plots_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
-                        writer = csv.writer(file_out)
-                        for i in range(len(hybrid_stds)):
-                            row = [str(history_train_fraction), str(user_id), str(history_len), str(seed),
-                                   str(hybrid_stds[i]), str(models_x[hybrid_idx][i]), str(models_y[hybrid_idx][i])]
-                            writer.writerow(row)
+                    if 'hybrid' in model_names:
+                        with open(plots_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
+                            writer = csv.writer(file_out)
+                            for i in range(len(hybrid_stds)):
+                                row = [str(history_train_fraction), str(user_id), str(history_len), str(seed),
+                                       str(hybrid_stds[i]), str(models_x[hybrid_idx][i]), str(models_y[hybrid_idx][i])]
+                                writer.writerow(row)
 
                 else:  # on test
                     h2_x = []

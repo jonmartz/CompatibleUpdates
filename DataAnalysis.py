@@ -11,6 +11,7 @@ import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.patches as patches
 
+
 def analyze_histories(dataset_path, user_directory, user_col):
 
     if not os.path.exists(user_directory):
@@ -59,20 +60,24 @@ def analyze_features(dataset_path, results_path, user_col, categ_cols):
     except KeyError:
         pass
 
-    for col in categ_cols:
-    # for col in df.columns:
+    # for col in categ_cols:
+    for col in df.columns:
         print(col + ' [' + str(df[col].min()) + ', ' + str(df[col].max()) + ']')
         if col not in categ_cols:
             sub_df = df
             bins = 100
-            # if col == 'ms_first_response':
-            #     sub_df = df.loc[(df['ms_first_response'] <= 150000) & (df['ms_first_response'] > 0)]
-            #     bins = 150
-            #
-            # elif col == 'attempt_count':
-            #     sub_df = df.loc[(df['attempt_count'] <= 10)]
-            #     bins = 20
-            #
+            if col == 'ms_first_response':
+                sub_df = df.loc[(df['ms_first_response'] <= 150000) & (df['ms_first_response'] > 0)]
+                bins = 150
+
+            elif col == 'attempt_count':
+                sub_df = df.loc[(df['attempt_count'] <= 10)]
+                bins = 20
+
+            elif col == 'opportunity':
+                sub_df = df.loc[(df['opportunity'] <= 100)]
+                bins = 50
+
             # elif col == 'correct' or col == 'original' or col == 'first_action':
             #     bins = 8
             #
@@ -108,18 +113,19 @@ def analyze_features(dataset_path, results_path, user_col, categ_cols):
             plt.ylabel('frequency')
             plt.title(col)
 
-            plt.savefig(results_path + '\\' + col + '.png')
+            # plt.savefig(results_path + '\\' + col + '.png')
+            plt.show()
 
-        else:
-            value_counts = df[col].value_counts()
-            value_counts.plot(kind='bar')
-            plt.xlabel('category')
-            plt.ylabel('frequency')
-            plt.title(col)
-            plt.subplots_adjust(bottom=0.3)
-
-            plt.savefig(results_path + '\\' + col + '.png')
-            # plt.show()
+        # else:
+        #     value_counts = df[col].value_counts()
+        #     value_counts.plot(kind='bar')
+        #     plt.xlabel('category')
+        #     plt.ylabel('frequency')
+        #     plt.title(col)
+        #     plt.subplots_adjust(bottom=0.3)
+        #
+        #     plt.savefig(results_path + '\\' + col + '.png')
+        #     # plt.show()
 
 
 def compare_history_train_and_history_test_sets(continuous_col_num_bins=20):
@@ -387,16 +393,22 @@ def dont_start_with_number(names):
 
 
 def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_cols, skip_cols,
-                           target_col, avg_plots_path, logs_path, weights_path):
+                           target_col, avg_plots_path, logs_path, weights_path, df_size=-1, boundaries=None):
 
     df_original = pd.read_csv(dataset_path).drop(columns=skip_cols)
+    if df_size != -1:
+        df_original = df_original[:df_size]
+    if boundaries is not None:
+        for col, boundary in boundaries.items():
+            df_original = df_original.loc[
+                (df_original[col] >= boundary[0]) & (df_original[col] <= boundary[1])]
     alpha = 0.5
     all_color = 'blue'
     scale = 2
 
     users_count = 1
     for user_col in user_cols:
-        print('%d/%d '%(users_count, len(original_categ_cols)) + user_col)
+        print('%d/%d '%(users_count, len(user_cols)) + user_col)
         categ_cols = original_categ_cols.copy()
         try:
             categ_cols.remove(user_col)
@@ -407,7 +419,8 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_
         hist_lens = hist_lens.groupby('user_id').mean()['instances']
 
         weights = pd.read_csv('%s\\%s\\weights.csv' % (weights_path, user_col))
-        weights = weights.groupby('col').abs().mean()['weight']
+        weights['weight'] = weights['weight'].abs()
+        weights = weights.groupby('col').mean()['weight']
 
         weights_alpha = normalize(weights.abs(), 0, 0.5)
 
@@ -503,9 +516,6 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_
         plt.savefig(result_path + '\\' + user_col + ' as users', bbox_inches='tight')
 
 
-# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific.csv'
-# user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\analysis\\users'
-
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
 # user_directory = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\analysis'
 # categ_cols = ['userResponse', 'Currency', 'TypeOfClothing', 'Gender', 'InStock', 'Brand', 'Colour']
@@ -547,7 +557,7 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_
 
 dataset = 'assistment'
 version = '80 split [50]'
-categ_cols = ['Sex', 'Embarked', 'AgeClass']
+categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type', 'original']
 user_cols = ['user_id']
 skip_cols = []
 target_col = 'correct'
@@ -558,24 +568,13 @@ avg_plots_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results
 logs_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s' % (dataset, version)
 weights_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s' % (dataset, version)
 result_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s\\cross analysis' % (dataset, version)
+df_size = 100000
+boundaries = {'attempt_count': [0, 10], 'ms_first_response': [0, 200000]}
 
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 
-# user_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-# for user_col in user_cols:
-#     analyze_histories(dataset_path, user_directory, user_col)
+cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_cols, target_col, avg_plots_path,
+                       logs_path, weights_path, df_size=df_size, boundaries=boundaries)
 
-cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_cols,
-                       target_col, avg_plots_path, logs_path, weights_path)
-
-# image_file = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\history sizes from 400 to 10000\\by user type\\workclass\\by_user_id\\workclass_Federal-gov.png'
-#
-# image = plt.imread(image_file)
-# fig, ax = plt.subplots()
-# im = ax.imshow(image)
-# patch = patches.Rectangle((80, 55), 500, 395, transform=ax.transData)
-# im.set_clip_path(patch)
-#
-# ax.axis('off')
-# plt.show()
+# analyze_features(dataset_path, result_path, user_cols[0], categ_cols)
