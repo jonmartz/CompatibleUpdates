@@ -12,10 +12,10 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.patches as patches
 
 
-def analyze_histories(dataset_path, user_directory, user_col):
+def analyze_histories(dataset_path, results_path, user_col):
 
-    if not os.path.exists(user_directory):
-        os.makedirs(user_directory)
+    if not os.path.exists(results_path):
+        os.makedirs(results_path)
 
     df = pd.read_csv(dataset_path)
     # df = pd.read_csv(dataset_path)[:200000]
@@ -48,7 +48,7 @@ def analyze_histories(dataset_path, user_directory, user_col):
         plt.title('user history length')
         plt.xlabel('history length')
         plt.ylabel('frequency')
-        plt.savefig(user_directory + '\\'+user_col+'_histories.png')
+        plt.savefig(results_path + '\\' + user_col + '_histories.png')
         # plt.show()
 
 
@@ -539,6 +539,8 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_
 # dataset = 'salaries'
 # version = '80 split'
 # categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# user_cols = ['relationship']
+# skip_cols = []
 # target_col = 'salary'
 
 # dataset = 'recividism'
@@ -555,13 +557,19 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_
 # skip_cols = []
 # target_col = 'Survived'
 
-dataset = 'assistment'
-version = '80 split [50]'
-categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type', 'original']
-user_cols = ['user_id']
-skip_cols = []
-target_col = 'correct'
+# dataset = 'assistment'
+# version = '80 split [50]'
+# categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type', 'original']
+# user_cols = ['user_id']
+# skip_cols = []
+# target_col = 'correct'
 
+dataset = 'mooc'
+version = '80 split'
+categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+user_cols = ['forum_uid']
+skip_cols = []
+target_col = 'salary'
 
 dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' % (dataset, dataset)
 avg_plots_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s\\averaged plots\\by user' % (dataset, version)
@@ -574,7 +582,9 @@ boundaries = {'attempt_count': [0, 10], 'ms_first_response': [0, 200000]}
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 
-cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_cols, target_col, avg_plots_path,
-                       logs_path, weights_path, df_size=df_size, boundaries=boundaries)
+# cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_cols, target_col, avg_plots_path,
+#                        logs_path, weights_path, df_size=df_size, boundaries=boundaries)
 
 # analyze_features(dataset_path, result_path, user_cols[0], categ_cols)
+
+analyze_histories(dataset_path, result_path, user_cols[0])

@@ -61,9 +61,9 @@ def label_encoder(path, cols_to_encode, make_balanced=False, zeroes_fraction=Non
 # cols_to_encode = [3,4,5,6,7,8,9,10,11,12,43,44,45,46,47,48,49,50,51]
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\fraudDetection\\train_short'
 
-cols_to_encode = [0]
+cols_to_encode = [8]
 # cols_to_encode = []
-dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\matific\\matific'
+dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mooc\\mooc'
 
 # cols_to_encode = []
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\KddCup\\2006\\kddCup_balanced'

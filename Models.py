@@ -17,7 +17,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout
 from keras.regularizers import L1L2
 import seaborn as sn
-
+import math
 
 class NeuralNetwork:
     """
@@ -518,11 +518,12 @@ class NeuralNetwork:
             # model.fit(x_history, dissonant_y, batch_size=50, epochs=300, verbose=0)
             # self.dissonant_likelihood = model.predict(x)
 
-            model = NeuralNetwork(x_history, y_dissonant, len(x_history), 200, 128, layers, weights_seed=1)
+            version_chooser = NeuralNetwork(x_history, y_dissonant, len(x_history), 200, 128, layers, weights_seed=1)
             tf.reset_default_graph()
 
             if method == 'nn':
-                self.dissonant_likelihood = model.predict_probabilities(x)
+                self.dissonant_likelihood = version_chooser.predict_probabilities(x)
+            self.hybrid_feature_weights = version_chooser.final_weights[0]
             # else:  # mixed
             #     stat_score = np.equal(np.round(model.predict_probabilities(x_history)), y_history).astype(int)
             #     neural_network_score = np.equal(np.round(model.predict_probabilities(x_history)), y_history).astype(int)
@@ -534,7 +535,7 @@ class NeuralNetwork:
         self.hybrid_new_output = self.predict_probabilities(x)
 
         if method == 'nn':
-            return model.test(x_history, y_dissonant)
+            return version_chooser.test(x_history, y_dissonant)
 
     def hybrid_test(self, y, std_offset):
         # get accuracy and compatibility
@@ -558,31 +559,54 @@ class History:
     def __init__(self, instances, labels=None, width_factor=0.1, epsilon=0.0000001):
         self.instances = instances
         self.labels = labels
-        self.means = np.mean(instances, axis=0)
-        self.vars = np.var(instances, axis=0) * width_factor + epsilon
         self.epsilon = epsilon
         self.width_factor = width_factor
-        self.likelihood = None
-        self.kernels = None
         self.parametric_magnitude_multiplier = 1
         self.kernel_magnitude_multiplier = 1
+        self.means = None
+        self.norm_const = None
+        self.inverse_cov = None
+        self.likelihood = None
+        self.kernels = None
 
-    def set_simple_likelihood(self, df, weights=None, magnitude_multiplier=1):
-        # compute likelihood for each attribute
-        self.parametric_magnitude_multiplier = magnitude_multiplier
-        diff = np.subtract(df, self.means)
-        sqr_diff = np.power(diff, 2)
-        div = np.add(sqr_diff, self.vars)
-        attribute_likelihoods = np.divide(self.vars, div) * magnitude_multiplier
+    def set_constants_for_likelihood(self):
+        self.means = np.mean(self.instances, axis=0)
+        # covariance = np.cov(self.instances.T)
+        # det = np.linalg.det(covariance)
+        # self.norm_const = 1.0/len(self.means)
+        # # self.norm_const = 1.0/(math.pow((2*math.pi), float(len(self.means))/2)*math.pow(det, 1.0/2))
+        # self.inverse_cov = np.linalg.inv(covariance)
 
-        # merge the likelihood of all attributes
-        if weights is None:
-            self.likelihood = np.mean(attribute_likelihoods, axis=1)
-        else:
-            self.likelihood = np.average(attribute_likelihoods, axis=1, weights=weights)
+    def set_simple_likelihood(self, X, weights=None, sigma=1, magnitude_multiplier=1):
+        self.set_constants_for_likelihood()
+
+        distances = []
+        for x in X:
+            distances += [np.linalg.norm(x - self.means)]
+        distances = np.array(distances)
+        likelihood = 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(
+            -0.5*np.square(distances / sigma)) * magnitude_multiplier
+        self.likelihood = np.reshape(likelihood, (len(X), 1))
+
+        # self.parametric_magnitude_multiplier = magnitude_multiplier
+        # likelihood = []
+        # for x in X:
+        #     difference = x - self.means
+        #     likelihood += [self.norm_const * math.pow(math.e, -0.5 * (difference * self.inverse_cov * difference.T))]
+        # self.likelihood = np.reshape(np.array(likelihood), (len(X), 1))
+
+        # diff = np.subtract(df, self.means)
+        # sqr_diff = np.power(diff, 2)
+        # div = np.add(sqr_diff, self.vars)
+        # attribute_likelihoods = np.divide(self.vars, div) * magnitude_multiplier
+        #
+        # # merge the likelihood of all attributes
+        # if weights is None:
+        #     self.likelihood = np.mean(attribute_likelihoods, axis=1)
+        # else:
+        #     self.likelihood = np.average(attribute_likelihoods, axis=1, weights=weights)
         # self.likelihood = np.round(self.likelihood)
         # self.likelihood = 1 + self.likelihood
-        self.likelihood = np.reshape(self.likelihood, (len(df), 1))
 
     def set_cheat_likelihood(self, df, threshold, likely_val=1):
         """
@@ -604,6 +628,6 @@ class History:
             for hist_instance in self.instances:
                 entry += [np.linalg.norm(instance - hist_instance)]
             distances += [entry]
-        distances = np.asanyarray(distances)
+        distances = np.array(distances)
         self.kernels = 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(
             -1 / 2 * np.square(distances / sigma)) * magnitude_multiplier

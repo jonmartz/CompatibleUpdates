@@ -954,9 +954,9 @@ if avg:
     # version = '80 split [] epochs h1 500 h2 800\\'
     # user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
 
-    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\assistment\\'
-    version = '80 split [50]\\'
-    user_types = ['user_id']
+    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mooc\\'
+    version = '80 split []\\'
+    user_types = ['forum_uid']
 
     individual_users = True
     only_split_users = False

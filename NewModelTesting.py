@@ -68,7 +68,7 @@ def plot_confusion_matrix(predicted, true, title, path):
     # sn.reset_orig()
 
 
-def get_weights(weights, col_groups_dict, seed):
+def get_df_weights(weights, col_groups_dict, seed, model, diss_weight):
     cols = []
     mean_weights = []
     for col_name, group in col_groups_dict.items():
@@ -80,7 +80,7 @@ def get_weights(weights, col_groups_dict, seed):
         else:
             mean_weights += [min_weight]
         # mean_weights += [weights[group].mean()]
-    return pd.DataFrame({'seed': seed, 'col': cols, 'weight': mean_weights})
+    return pd.DataFrame({'seed': seed, 'model': model, 'diss_weight': diss_weight, 'col': cols, 'weight': mean_weights})
 
 
 # Data-set paths
@@ -107,18 +107,18 @@ def get_weights(weights, col_groups_dict, seed):
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\fraudDetection.csv"
 # target_col = 'isFraud'
 
-dataset = 'assistment'
-target_col = 'correct'
-original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-user_categs = ['user_id']
-skip_cols = []
-layers = [50]
-df_max_size = 100000
-history_train_fraction = 0.8
-h1_train_size = 200
-h2_train_size = 5000
-h1_epochs = 600
-h2_epochs = 400
+# dataset = 'assistment'
+# target_col = 'correct'
+# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+# user_categs = ['user_id']
+# skip_cols = []
+# layers = [50]
+# df_max_size = 100000
+# history_train_fraction = 0.8
+# h1_train_size = 200
+# h2_train_size = 5000
+# h1_epochs = 600
+# h2_epochs = 400
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
@@ -141,8 +141,9 @@ h2_epochs = 400
 # dataset = "salaries"
 # target_col = 'salary'
 # original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-# user_categs = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-# skip_cols = []
+# user_categs = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
+# # user_categs = ['workclass', 'sex', 'native-country']
+# skip_cols = ['fnlgwt']
 # df_max_size = -1
 # layers = []
 # history_train_fraction = 0.8
@@ -186,6 +187,24 @@ h2_epochs = 400
 # h1_epochs = 200
 # h2_epochs = 200
 
+dataset = 'mooc'
+target_col = 'Opinion(1/0)'
+# target_col = 'Question(1/0)'
+# target_col = 'Answer(1/0)'
+original_categ_cols = ['course_display_name', 'post_type', 'CourseType']
+user_categs = ['forum_uid']
+skip_cols = ['up_count', 'reads']
+layers = []
+df_max_size = -1
+history_train_fraction = 0.8
+h1_train_size = 100
+h2_train_size = 5000
+h1_epochs = 300
+h2_epochs = 200
+
+# skip_users = [0, 18, 5747]
+skip_users = []
+
 test_size = int(h2_train_size * (1-history_train_fraction))
 batch_size = 128
 regularization = 0
@@ -195,31 +214,34 @@ seeds = range(3)
 
 # noinspection PyUnboundLocalVariable
 
-# diss_count = 5
 normalize_diss_weight = True
+
+# diss_weights = [0, 0.01, 0.02, 0.03, 0.04, 0.05]
+diss_weights = [0.1, 0.15, 0.2]
+
+# diss_count = 5
 # if normalize_diss_weight:
-#     diss_weights = [(i + i / (diss_count - 1)) / diss_count for i in range(diss_count)]
+#     diss_weights += [(i + i / (diss_count - 1)) / diss_count for i in range(diss_count)]
 #     diss_multiply_factor = 1
 # else:
 #     diss_weights = range(diss_count)
 #     diss_multiply_factor = 1.0
 
-diss_weights = [0.01, 0.02, 0.03, 0.04, 0.05]
-
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
-min_history_size = 200
+min_history_size = 150
 max_history_size = 100000
 current_user_count = 0
-user_max_count = 15
+user_max_count = -1
 
 model_names = [
     'no hist',
-    'L3'
-    # 'hybrid'
+    # 'L0',
+    'L3',
+    'hybrid'
 ]
-colors = {'no hist': 'k', 'L3': 'r', 'hybrid': 'g'}
+colors = {'no hist': 'k', 'L0': 'b', 'L3': 'r', 'hybrid': 'g'}
 hybrid_method = 'nn'
 
 split_by_chronological_order = False
@@ -265,11 +287,9 @@ for user_categ in user_categs:
         shutil.rmtree(plots_dir)
     else:
         os.makedirs(plots_dir)
-    # os.makedirs(plots_dir + '\\by_hist_length')
-    # os.makedirs(plots_dir + '\\by_accuracy_range')
-    # os.makedirs(plots_dir + '\\by_compatibility_range')
     os.makedirs(plots_dir + '\\by_user_id')
     os.makedirs(plots_dir + '\\model_training')
+    os.makedirs(plots_dir + '\\weights')
 
     with open(plots_dir + '\\log.csv', 'w', newline='') as file_out:
         writer = csv.writer(file_out)
@@ -358,19 +378,20 @@ for user_categ in user_categs:
     Ys_by_seed = []
     h1s_by_seed = []
     h2s_not_using_history_by_seed = []
-    df_weights = pd.DataFrame(columns=['seed', 'col', 'weight'])
+    df_weights = pd.DataFrame(columns=['seed', 'model', 'diss_weight', 'col', 'weight'])
 
     tests_group = {}
     tests_group_user_ids = []
 
     if only_train_h1:
         print('\nusing cross validation\n')
-        train_sizes = [200, 5000]
+        train_sizes = [50]
         # train_sizes = [5000]
-        h1_epochs = 400
+        # train_sizes = [200, 5000]
+        h1_epochs = 800
         seeds = range(2)
         n_features = int(df_train.shape[1])-1
-        layers = [50]
+        layers = []
         # layers = [int(n_features/2)]
         # layers = [90, 40]
         regularization = 0
@@ -429,6 +450,9 @@ for user_categ in user_categs:
                                    weights_seed=1, plot_train=True, regularization=regularization)
                 h1s_by_seed += [h1]
 
+                df_weights = df_weights.append(
+                    get_df_weights(h1.final_weights[0], col_groups_dict, seed, 'h1', 0))
+
                 train_accuracies[seed] = h1.plot_train_accuracy
                 test_accuracies[seed] = h1.plot_test_accuracy
             else:
@@ -455,9 +479,8 @@ for user_categ in user_categs:
                     tf.reset_default_graph()
                     h2s_not_using_history += [h2]
 
-                    if first_diss_weight:
-                        first_diss_weight = False
-                        df_weights = df_weights.append(get_weights(h2.final_weights[0], col_groups_dict, seed))
+                    df_weights = df_weights.append(
+                        get_df_weights(h2.final_weights[0], col_groups_dict, seed, 'h2', diss_weight))
                     if only_h2_weights:
                         break
 
@@ -481,16 +504,16 @@ for user_categ in user_categs:
                 if show_plots:
                     plt.show()
 
-                    if only_train_h1:
-                        h1_weights = get_weights(h1.final_weights[0], col_groups_dict, seed)
-                        plt.bar(h1_weights['col'], h1_weights['weight'])
-                        plt.grid(axis='y')
-                        plt.xticks(rotation=30)
-                        plt.show()
+                    # if only_train_h1:
+                    #     h1_weights = get_df_weights(h1.final_weights[0], col_groups_dict, seed)
+                    #     plt.bar(h1_weights['col'], h1_weights['weight'])
+                    #     plt.grid(axis='y')
+                    #     plt.xticks(rotation=30)
+                    #     plt.show()
                 plt.clf()
 
 
-    df_weights.to_csv('%s\\weights.csv' % plots_dir, index=False)
+    df_weights.to_csv('%s\\weights\\no_personalization_weights.csv' % plots_dir, index=False)
 
     if only_train_h1:
         exit()
@@ -544,7 +567,7 @@ for user_categ in user_categs:
                     user_train_set = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
 
                 history_len = len(user_test_set) + len(user_train_set)
-                if min_history_size <= history_len <= max_history_size:
+                if min_history_size <= history_len <= max_history_size and user_id not in skip_users:
                     total_users += 1
                     user_ids_in_range += [user_id]
                     user_test_sets[user_id] = user_test_set
@@ -571,10 +594,12 @@ for user_categ in user_categs:
                 history_train_x = scaler.transform(user_train_set.loc[:, user_train_set.columns != target_col])
                 history_train_y = labelizer.transform(user_train_set[[target_col]])
 
-                history = Models.History(history_train_x, history_train_y, 0.001)
+                history = Models.History(history_train_x, history_train_y, width_factor=0.01)
 
             else:
                 history_len = len(user_test_set)
+
+            df_weights = pd.DataFrame(columns=['seed', 'model', 'diss_weight', 'col', 'weight'])
 
             for seed_idx in range(len(seeds)):
                 seed = seeds[seed_idx]
@@ -605,7 +630,7 @@ for user_categ in user_categs:
                 if user_group_name != 'test':
 
                     if 'L0' in model_names:
-                        history.set_simple_likelihood(X, magnitude_multiplier=2)
+                        history.set_simple_likelihood(X, magnitude_multiplier=1)
                         # history.set_simple_likelihood(X, h2s_not_using_history[0].W1, magnitude_multiplier=2)
                     if {'L1', 'L2'}.intersection(set(model_names)):
                         history.set_kernels(X, magnitude_multiplier=10)
@@ -624,7 +649,10 @@ for user_categ in user_categs:
 
                         if model_name == 'hybrid':
                             weights = hybrid_stds
-                            h2s_not_using_history[0].set_hybrid_test(history, history_test_x, hybrid_method, layers)
+                            h2 = h2s_not_using_history[0]
+                            h2.set_hybrid_test(history, history_test_x, hybrid_method, layers)
+                            df_weights = df_weights.append(
+                                get_df_weights(h2.hybrid_feature_weights, col_groups_dict, seed, model_name, weight))
 
                         for j in range(len(weights)):
                             if model_name == 'no hist':
@@ -642,6 +670,9 @@ for user_categ in user_categs:
                                     tf.reset_default_graph()
                                     result = h2.test(history_test_x, history_test_y, h1)
 
+                                    df_weights = df_weights.append(
+                                        get_df_weights(h2.final_weights[0], col_groups_dict, seed, model_name, weight))
+
                             model_x += [result['compatibility']]
                             model_y += [result['auc']]
 
@@ -651,10 +682,15 @@ for user_categ in user_categs:
                                 path = confusion_dir + '\\'+model_name+'_seed_'+str(seed)+'_' + str(j) + '.png'
                                 plot_confusion_matrix(result['predicted'], history_test_y, title, path)
 
+                    df_weights.to_csv('%s\\weights\\%s_weights.csv' % (plots_dir, str(user_id)), index=False)
+
                     min_x = min(min(i) for i in models_x)
                     min_y = min(min(i) for i in models_y)
                     max_x = max(max(i) for i in models_x)
                     max_y = max(max(i) for i in models_y)
+
+                    com_range = max_x - min_x
+                    auc_range = max_y - min_y
 
                     if compute_area:
                         mono_xs = [i.copy() for i in models_x]
@@ -669,11 +705,7 @@ for user_categ in user_categs:
                                  for i in range(len(mono_xs))]
 
                     if make_plots:
-                        
-                        com_range = max_x - min_x
-                        auc_range = max_y - min_y
 
-                        # plotting
                         h1_x = [min_x, max_x]
                         h1_y = [h1_acc, h1_acc]
                         plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
@@ -756,7 +788,7 @@ for user_categ in user_categs:
                     plt.title('test seed=' + str(user_id) + ' h1=' + str(h1_train_size) + ' h2=' + str(
                         h2_train_size)+' len='+str(history_len))
 
-                    plt.savefig(plots_dir+'\\test_for_seed_' + str(user_id) + '.png')
+                    plt.savefig(plots_dir+'\\model_training\\test_for_seed_' + str(user_id) + '.png')
                     if plot_confusion:
                         plt.savefig(confusion_dir+'\\plot.png')
                     plt.show()
