@@ -393,11 +393,14 @@ def dont_start_with_number(names):
 
 
 def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_cols, skip_cols,
-                           target_col, avg_plots_path, logs_path, weights_path, df_size=-1, boundaries=None):
+                           target_col, avg_plots_path, logs_path, weights_path,
+                           df_size=-1, boundaries=None, users=None):
 
     df_original = pd.read_csv(dataset_path).drop(columns=skip_cols)
     if df_size != -1:
         df_original = df_original[:df_size]
+    if users is not None:
+        df_original = df_original[df_original[user_cols[0]].isin(users)]
     if boundaries is not None:
         for col, boundary in boundaries.items():
             df_original = df_original.loc[
@@ -540,8 +543,11 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_
 # version = '80 split'
 # categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 # user_cols = ['relationship']
-# skip_cols = []
+# skip_cols = ['fnlgwt', 'education-num', 'occupation', 'native-country']
 # target_col = 'salary'
+# df_size = -1
+# boundaries = None
+# users = ['Husband', 'Wife']
 
 # dataset = 'recividism'
 # version = '80 split [] h1 500 h2 300 epochs'
@@ -557,34 +563,35 @@ def cross_analyze_features(dataset_path, result_path, original_categ_cols, user_
 # skip_cols = []
 # target_col = 'Survived'
 
-# dataset = 'assistment'
-# version = '80 split [50]'
-# categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type', 'original']
-# user_cols = ['user_id']
-# skip_cols = []
-# target_col = 'correct'
-
-dataset = 'mooc'
-version = '80 split'
-categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-user_cols = ['forum_uid']
+dataset = 'assistment'
+version = '80 split [50]'
+categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type', 'original']
+user_cols = ['user_id']
 skip_cols = []
-target_col = 'salary'
+target_col = 'correct'
+df_size = 100000
+boundaries = {'attempt_count': [0, 10], 'ms_first_response': [0, 200000]}
+users = [70732, 70746, 70816, 71740, 73685, 77725]
+
+# dataset = 'mooc'
+# version = '80 split'
+# categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# user_cols = ['forum_uid']
+# skip_cols = []
+# target_col = 'salary'
 
 dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' % (dataset, dataset)
 avg_plots_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s\\averaged plots\\by user' % (dataset, version)
 logs_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s' % (dataset, version)
 weights_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s' % (dataset, version)
 result_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\%s\\cross analysis' % (dataset, version)
-df_size = 100000
-boundaries = {'attempt_count': [0, 10], 'ms_first_response': [0, 200000]}
 
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 
-# cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_cols, target_col, avg_plots_path,
-#                        logs_path, weights_path, df_size=df_size, boundaries=boundaries)
+cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_cols, target_col, avg_plots_path,
+                       logs_path, weights_path, df_size=df_size, boundaries=boundaries)
 
 # analyze_features(dataset_path, result_path, user_cols[0], categ_cols)
 
-analyze_histories(dataset_path, result_path, user_cols[0])
+# analyze_histories(dataset_path, result_path, user_cols[0])

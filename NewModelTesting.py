@@ -138,19 +138,19 @@ def get_df_weights(weights, col_groups_dict, seed, model, diss_weight):
 # # skip_cols = ['Animation', 'Comedy', 'Family', 'Adventure', 'Fantasy', 'Romance', 'Drama', 'Action', 'Crime', 'Thriller',
 # #              'Horror', 'History', 'Science Fiction', 'Mystery', 'War', 'Foreign', 'Music', 'Documentary', 'Western', 'TV Movie']
 
-# dataset = "salaries"
-# target_col = 'salary'
-# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+dataset = "salaries"
+target_col = 'salary'
+original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 # user_categs = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
-# # user_categs = ['workclass', 'sex', 'native-country']
+user_categs = ['relationship', 'sex']
 # skip_cols = ['fnlgwt']
-# df_max_size = -1
-# layers = []
-# history_train_fraction = 0.8
-# h1_train_size = 200
-# h2_train_size = 5000
-# h1_epochs = 500
-# h2_epochs = 200
+df_max_size = -1
+layers = []
+history_train_fraction = 0.8
+h1_train_size = 200
+h2_train_size = 5000
+h1_epochs = 500
+h2_epochs = 200
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\abalone\\abalone.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\abalone"
@@ -187,20 +187,20 @@ def get_df_weights(weights, col_groups_dict, seed, model, diss_weight):
 # h1_epochs = 200
 # h2_epochs = 200
 
-dataset = 'mooc'
-target_col = 'Opinion(1/0)'
-# target_col = 'Question(1/0)'
-# target_col = 'Answer(1/0)'
-original_categ_cols = ['course_display_name', 'post_type', 'CourseType']
-user_categs = ['forum_uid']
-skip_cols = ['up_count', 'reads']
-layers = []
-df_max_size = -1
-history_train_fraction = 0.8
-h1_train_size = 100
-h2_train_size = 5000
-h1_epochs = 300
-h2_epochs = 200
+# dataset = 'mooc'
+# target_col = 'Opinion(1/0)'
+# # target_col = 'Question(1/0)'
+# # target_col = 'Answer(1/0)'
+# original_categ_cols = ['course_display_name', 'post_type', 'CourseType']
+# user_categs = ['forum_uid']
+# skip_cols = ['up_count', 'reads']
+# layers = []
+# df_max_size = -1
+# history_train_fraction = 0.8
+# h1_train_size = 100
+# h2_train_size = 5000
+# h1_epochs = 300
+# h2_epochs = 200
 
 # skip_users = [0, 18, 5747]
 skip_users = []
@@ -216,8 +216,8 @@ seeds = range(3)
 
 normalize_diss_weight = True
 
-# diss_weights = [0, 0.01, 0.02, 0.03, 0.04, 0.05]
-diss_weights = [0.1, 0.15, 0.2]
+diss_weights = [0, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+# diss_weights = [0.1, 0.15, 0.2]
 
 # diss_count = 5
 # if normalize_diss_weight:
@@ -230,18 +230,27 @@ diss_weights = [0.1, 0.15, 0.2]
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
-min_history_size = 150
+min_history_size = 0
 max_history_size = 100000
 current_user_count = 0
-user_max_count = -1
+user_max_count = 15
 
 model_names = [
     'no hist',
-    # 'L0',
+    'L0',
+    'L1',
+    'L2',
     'L3',
     'hybrid'
 ]
-colors = {'no hist': 'k', 'L0': 'b', 'L3': 'r', 'hybrid': 'g'}
+colors = {
+    'no hist': 'k',
+    'L0': 'b',
+    'L1': 'yellow',
+    'L2': 'purple',
+    'L3': 'r',
+    'hybrid': 'g'
+}
 hybrid_method = 'nn'
 
 split_by_chronological_order = False
@@ -630,9 +639,11 @@ for user_categ in user_categs:
                 if user_group_name != 'test':
 
                     if 'L0' in model_names:
+                        print('setting likelihoods...')
                         history.set_simple_likelihood(X, magnitude_multiplier=1)
                         # history.set_simple_likelihood(X, h2s_not_using_history[0].W1, magnitude_multiplier=2)
                     if {'L1', 'L2'}.intersection(set(model_names)):
+                        print('setting kernels...')
                         history.set_kernels(X, magnitude_multiplier=10)
 
                     models_x = []

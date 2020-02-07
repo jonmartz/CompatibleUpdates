@@ -534,17 +534,26 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
                                   user_type='users', save_user_id='', simple_plots=False, weighted=True):
 
     model_names = [
+        'L0',
+        'L1',
+        'L2',
         'L3',
         'hybrid',
         'no hist'
     ]
     labels_dict = {
-        'no hist': 'without personalization',
-        'L3': 'L3 personalization',
-        'hybrid': 'hybrid personalization'
+        'no hist': 'post-update',
+        'L0': 'L0',
+        'L1': 'L1',
+        'L2': 'L2',
+        'L3': 'L3',
+        'hybrid': 'hybrid'
     }
     colors_dict = {
         'no hist': 'k',
+        'L0': 'b',
+        'L1': 'purple',
+        'L2': 'orange',
         'L3': 'r',
         'hybrid': 'g'
     }
@@ -621,12 +630,12 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
 
         for i in range(len(model_names)):
             plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i], linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
-        plt.plot(h1_x, h1_y, 'k--', marker='.', label='before update', linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
+        plt.plot(h1_x, h1_y, 'k--', marker='.', linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
 
     else:
         for i in range(len(model_names)):
             plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i])
-        plt.plot(h1_x, h1_y, 'k--', marker='.', label='before update')
+        plt.plot(h1_x, h1_y, 'k--', marker='.', label='pre-update')
 
     if not simple_plots:
         xlabel = 'compatibility'
@@ -639,7 +648,7 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
         delimiter = ' = '
         if save_user_id == '':
             delimiter = ''
-        title = 'Average tradeoff for %s%s%s' % (user_type, delimiter, save_user_id)
+        title = '%s%s%s, n = %d' % (user_type, delimiter, save_user_id, size)
         plt.title(title)
 
         # plot std
@@ -940,9 +949,10 @@ if plot:
 
 avg = True
 if avg:
-    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
-    # version = '80 split\\'
-    # # user_types = ['all']
+    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
+    version = 'all models\\'
+    # user_types = ['all']
+    user_types = ['relationship']
     # user_types = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 
     # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
@@ -954,9 +964,13 @@ if avg:
     # version = '80 split [] epochs h1 500 h2 800\\'
     # user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
 
-    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mooc\\'
-    version = '80 split []\\'
-    user_types = ['forum_uid']
+    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mooc\\'
+    # version = 'all models\\'
+    # user_types = ['forum_uid']
+
+    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\assistment\\'
+    # version = '80 split [50]\\'
+    # user_types = ['user_id']
 
     individual_users = True
     only_split_users = False
@@ -986,7 +1000,7 @@ if avg:
                 user_hybrid_log_path = '%slog_by_user\\%s_hybrid_log.csv' % (user_type_dir, user_id)
                 plots_averaged_over_all_users(user_log_path, user_hybrid_log_path, results_dir,
                                               user_type=user_type, save_user_id=user_id, weighted=False,
-                                              simple_plots=True)
+                                              simple_plots=False)
 
 # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic\\'
 # version = '80 split [] epochs h1 500 h2 800'
