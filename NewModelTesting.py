@@ -82,16 +82,11 @@ def get_df_weights(weights, col_groups_dict, seed, model, diss_weight):
         # mean_weights += [weights[group].mean()]
     return pd.DataFrame({'seed': seed, 'model': model, 'diss_weight': diss_weight, 'col': cols, 'weight': mean_weights})
 
-
 # Data-set paths
 
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\creditRiskAssessment\\heloc_dataset_v1.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\creditRiskAssessment.csv"
 # target_col = 'RiskPerformance'
-
-# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\hospitalMortalityPrediction\\ADMISSIONS_encoded.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\hospitalMortalityPrediction.csv"
-# target_col = 'HOSPITAL_EXPIRE_FLAG'
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\recividism\\recividism.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism"
@@ -142,8 +137,10 @@ dataset = "salaries"
 target_col = 'salary'
 original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 # user_categs = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
-user_categs = ['relationship', 'sex']
 skip_cols = ['fnlgwt']
+user_categs = ['relationship']
+skip_users = []
+only_users = ['Wife']
 df_max_size = -1
 layers = []
 history_train_fraction = 0.8
@@ -152,11 +149,45 @@ h2_train_size = 5000
 h1_epochs = 500
 h2_epochs = 200
 
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\abalone\\abalone.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\abalone"
+# dataset = "diabetes"
+# target_col = 'Outcome'
+# original_categ_cols = ['AgeClass']
+# # user_categs = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
+# user_categs = ['AgeClass']
+# skip_cols = []
+# df_max_size = -1
+# layers = [5, 5, 5]
+# history_train_fraction = 0.8
+# h1_train_size = 10
+# h2_train_size = 70
+# h1_epochs = 1000
+# h2_epochs = 500
+
+# dataset = 'abalone'
 # target_col = 'Rings'
-# categ_cols = []
-# user_group_names = ['sex']
+# original_categ_cols = ['sex']
+# user_categs = ['sex']
+# skip_cols = []
+# df_max_size = -1
+# layers = [5]
+# history_train_fraction = 0.8
+# h1_train_size = 100
+# h2_train_size = 3000
+# h1_epochs = 300
+# h2_epochs = 300
+
+# dataset = 'hospital_mortality'
+# target_col = 'HOSPITAL_EXPIRE_FLAG'
+# original_categ_cols = ['ADMISSION_TYPE', 'ADMISSION_LOCATION', 'INSURANCE', 'RELIGION', 'MARITAL_STATUS', 'ETHNICITY']
+# user_categs = ['MARITAL_STATUS']
+# skip_cols = []
+# df_max_size = -1
+# layers = []
+# history_train_fraction = 0.8
+# h1_train_size = 200
+# h2_train_size = 5000
+# h1_epochs = 400
+# h2_epochs = 200
 
 # selecting experiment parameters
 
@@ -203,20 +234,25 @@ h2_epochs = 200
 # h2_epochs = 200
 
 # skip_users = [0, 18, 5747]
-skip_users = []
+
+only_train_h1 = False
 
 test_size = int(h2_train_size * (1-history_train_fraction))
 batch_size = 128
 regularization = 0
 
-seeds = range(3)
-# seeds = [0]
+# seeds = range(2)
+seeds = [2, 3]
 
 # noinspection PyUnboundLocalVariable
 
 normalize_diss_weight = True
 
-diss_weights = [0, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+# make sure that 0 is in diss_weights
+# diss_weights = [0, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+diss_weights = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+# diss_weights = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
+# diss_weights = [0]
 # diss_weights = [0.1, 0.15, 0.2]
 
 # diss_count = 5
@@ -237,11 +273,12 @@ user_max_count = 15
 
 model_names = [
     'no hist',
-    'L0',
-    'L1',
-    'L2',
+    # 'L0',
+    # 'L1',
+    # 'L2',
     'L3',
-    'hybrid'
+    'hybrid',
+    # 'full_hybrid',
 ]
 colors = {
     'no hist': 'k',
@@ -249,9 +286,19 @@ colors = {
     'L1': 'yellow',
     'L2': 'purple',
     'L3': 'r',
-    'hybrid': 'g'
+    'hybrid': 'g',
+    'full_hybrid': 'c'
 }
 hybrid_method = 'nn'
+
+# if only hybrid, train only h2 with 0 dissonance
+only_hybrid = True
+for model_name in model_names:
+    if 'hybrid' not in model_name:
+        only_hybrid = False
+        break
+if only_hybrid:
+    diss_weights = [0]
 
 split_by_chronological_order = False
 copy_h1_weights = False
@@ -262,7 +309,6 @@ show_plots = True
 compute_area = False
 plot_confusion = False
 
-only_train_h1 = False
 only_h2_weights = False
 
 # skip cols
@@ -300,20 +346,26 @@ for user_categ in user_categs:
     os.makedirs(plots_dir + '\\model_training')
     os.makedirs(plots_dir + '\\weights')
 
-    with open(plots_dir + '\\log.csv', 'w', newline='') as file_out:
-        writer = csv.writer(file_out)
-        header = ['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc',
-                  'diss weight']
-        for name in model_names:
-            if name != 'hybrid':
-                header += [name+' x', name+' y']
-        writer.writerow(header)
+    with open(plots_dir + '\\log.csv', 'w', newline='') as log_file:
+        with open(plots_dir + '\\hybrid_log.csv', 'w', newline='') as hybrid_log_file:
+            log_writer = csv.writer(log_file)
+            hybrid_log_writer = csv.writer(hybrid_log_file)
+            log_header = ['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc', 'diss weight']
+            hybrid_log_header = ['train frac', 'user_id', 'instances', 'train seed', 'std offset']
+            for name in model_names:
+                # if name != 'hybrid':
+                if 'hybrid' not in name:
+                    log_header += [name+' x', name+' y']
+                else:
+                    hybrid_log_header += [name+' x', name+' y']
+            log_writer.writerow(log_header)
+            hybrid_log_writer.writerow(hybrid_log_header)
 
-    if 'hybrid' in model_names:
-        with open(plots_dir + '\\hybrid_log.csv', 'w', newline='') as file_out:
-            writer = csv.writer(file_out)
-            header = ['train frac', 'user_id', 'instances', 'train seed', 'std offset', 'hybrid x', 'hybrid y']
-            writer.writerow(header)
+    # if 'hybrid' in model_names:
+    #     with open(plots_dir + '\\hybrid_log.csv', 'w', newline='') as hybrid_log_file:
+    #         hybrid_log_writer = csv.writer(hybrid_log_file)
+    #         hybrid_log_header = ['train frac', 'user_id', 'instances', 'train seed', 'std offset', 'hybrid x', 'hybrid y']
+    #         hybrid_log_writer.writerow(hybrid_log_header)
 
     print('loading data...')
     df_full = pd.read_csv(full_dataset_path)
@@ -394,24 +446,24 @@ for user_categ in user_categs:
 
     if only_train_h1:
         print('\nusing cross validation\n')
-        train_sizes = [50]
-        # train_sizes = [5000]
+        train_sizes = [8000]
         # train_sizes = [200, 5000]
-        h1_epochs = 800
-        seeds = range(2)
+        h1_epochs = 1000
+        seeds = range(1)
         n_features = int(df_train.shape[1])-1
         layers = []
         # layers = [int(n_features/2)]
         # layers = [90, 40]
         regularization = 0
         bottom, top = 0.4, 1.02
+        delta_train_size = 200
     else:
         train_sizes = [h1_train_size]
 
     for h1_train_size in train_sizes:
 
         if only_train_h1:
-            h2_train_size = h1_train_size + 200
+            h2_train_size = h1_train_size + delta_train_size
 
         train_accuracies = pd.DataFrame()
         test_accuracies = pd.DataFrame()
@@ -425,6 +477,12 @@ for user_categ in user_categs:
             if not only_train_h1:
                 df_train_subset = df_train.sample(n=h2_train_size, random_state=seed)
                 # df_train_subset = df_train.sample(n=min(h2_train_size, len(df_train)), random_state=seed)
+                df_train_subsets_by_seed += [df_train_subset]
+
+                # tests_group[str(seed)] = df_train_subset
+                tests_group[str(seed)] = df_test.sample(n=test_size, random_state=seed)
+                # tests_group[str(seed)] = df_test.sample(n=min(test_size, len(df_test)), random_state=seed)
+                tests_group_user_ids += [str(seed)]
             else:
                 df_train_subset = df_train.sample(n=h2_train_size, random_state=seed).reset_index(drop=True)
                 # df_train_subset = df_train.sample(n=min(h2_train_size, len(df_train)), random_state=seed).reset_index(drop=True)
@@ -435,13 +493,6 @@ for user_categ in user_categs:
                 train_part = df_train_subset.drop(test_range)
                 test_part = df_train_subset.loc[test_range]
                 df_train_subset = train_part.append(test_part)
-
-            df_train_subsets_by_seed += [df_train_subset]
-
-            # tests_group[str(seed)] = df_train_subset
-            tests_group[str(seed)] = df_test.sample(n=test_size, random_state=seed)
-            # tests_group[str(seed)] = df_test.sample(n=min(test_size, len(df_test)), random_state=seed)
-            tests_group_user_ids += [str(seed)]
 
             X = df_train_subset.loc[:, df_train_subset.columns != target_col]
             Y = df_train_subset[[target_col]]
@@ -577,10 +628,11 @@ for user_categ in user_categs:
 
                 history_len = len(user_test_set) + len(user_train_set)
                 if min_history_size <= history_len <= max_history_size and user_id not in skip_users:
-                    total_users += 1
-                    user_ids_in_range += [user_id]
-                    user_test_sets[user_id] = user_test_set
-                    user_train_sets[user_id] = user_train_set
+                    if len(only_users) > 0 and user_id in only_users:
+                        total_users += 1
+                        user_ids_in_range += [user_id]
+                        user_test_sets[user_id] = user_test_set
+                        user_train_sets[user_id] = user_train_set
 
         user_count = 0
         # for user_id, user_test_set in user_group_test:
@@ -658,19 +710,23 @@ for user_categ in user_categs:
                         models_y += [model_y]
                         weights = diss_weights
 
-                        if model_name == 'hybrid':
+                        if 'hybrid' in model_name:
                             weights = hybrid_stds
                             h2 = h2s_not_using_history[0]
-                            h2.set_hybrid_test(history, history_test_x, hybrid_method, layers)
+                            if model_name == 'hybrid':
+                                h2.set_hybrid_test(history, history_test_x, hybrid_method, layers)
+                            elif model_name == 'full_hybrid':
+                                h2_train_set = Models.History(X, Y)
+                                h2.set_hybrid_test(h2_train_set, history_test_x, hybrid_method, layers)
                             df_weights = df_weights.append(
-                                get_df_weights(h2.hybrid_feature_weights, col_groups_dict, seed, model_name, weight))
+                                get_df_weights(h2.hybrid_feature_weights, col_groups_dict, seed, model_name, 0))
 
                         for j in range(len(weights)):
                             if model_name == 'no hist':
                                 result = h2s_not_using_history[j].test(history_test_x, history_test_y, h1)
                             else:
                                 weight = weights[j]
-                                if model_name == 'hybrid':
+                                if 'hybrid' in model_name:
                                     result = h2s_not_using_history[0].hybrid_test(history_test_y, weight)
                                 else:
                                     print('weight ' + str(j + 1) + "/" + str(len(weights)))
@@ -748,11 +804,11 @@ for user_categ in user_categs:
                         if show_plots:
                             plt.show()
 
-                    # write log
-                    if 'hybrid' in model_names:
-                        hybrid_idx = model_names.index('hybrid')
-                    else:
-                        hybrid_idx = -1
+                    # # write log
+                    # if 'hybrid' in model_names:
+                    #     hybrid_idx = model_names.index('hybrid')
+                    # else:
+                    #     hybrid_idx = -1
 
                     with open(plots_dir + '\\log.csv', 'a', newline='') as file_out:
                         writer = csv.writer(file_out)
@@ -760,19 +816,23 @@ for user_categ in user_categs:
                             row = [str(history_train_fraction), str(user_id), str(history_len), str(seed),
                                    str(com_range), str(auc_range), str(h1_acc), str(diss_weights[i])]
                             for j in range(len(model_names)):
-                                if j == hybrid_idx:
-                                    continue
-                                row += [models_x[j][i]]
-                                row += [models_y[j][i]]
+                                model_name = model_names[j]
+                                if 'hybrid' not in model_name:
+                                    row += [models_x[j][i]]
+                                    row += [models_y[j][i]]
                             writer.writerow(row)
 
-                    if 'hybrid' in model_names:
-                        with open(plots_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
-                            writer = csv.writer(file_out)
-                            for i in range(len(hybrid_stds)):
-                                row = [str(history_train_fraction), str(user_id), str(history_len), str(seed),
-                                       str(hybrid_stds[i]), str(models_x[hybrid_idx][i]), str(models_y[hybrid_idx][i])]
-                                writer.writerow(row)
+                    with open(plots_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
+                        writer = csv.writer(file_out)
+                        for i in range(len(hybrid_stds)):
+                            row = [str(history_train_fraction), str(user_id), str(history_len), str(seed),
+                                   str(hybrid_stds[i])]
+                            for j in range(len(model_names)):
+                                model_name = model_names[j]
+                                if 'hybrid' in model_name:
+                                    row += [models_x[j][i]]
+                                    row += [models_y[j][i]]
+                            writer.writerow(row)
 
                 else:  # on test
                     h2_x = []

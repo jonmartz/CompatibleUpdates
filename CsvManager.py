@@ -3,6 +3,7 @@ import numpy as np
 import os
 from sklearn.metrics import auc
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 import ast
@@ -241,31 +242,43 @@ def cutoff(x, y, cutoff_x):
             break
 
 
-def area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_dir, L1_log_path=None,
-                    cut_by_min=False, skip_L_models=False, only_L1=False):
+def auc_summary(auc_path, results_path):
+    df_auc = pd.read_csv(auc_path).groupby('user_id').mean()
+    df_auc_summary = pd.DataFrame({'metric': ['auc', 'improv']})
+    for col in df_auc:
+        if 'no hist' in col:
+            no_hist_avg = np.average(df_auc[col], weights=df_auc['instances'])
+            break
+    for col in df_auc:
+        if 'area' in col:
+            col_avg = np.average(df_auc[col], weights=df_auc['instances'])
+            improv = col_avg/no_hist_avg - 1
+            df_auc_summary[col] = [col_avg, improv]
+    df_auc_summary.to_csv(results_path, index=False)
 
-    auc_path = plots_dir + '\\auc_from_log.csv'
+
+def area_calculator(log_path, hybrid_log_path, results_path, model_names, cut_by_min=False):
+
     log_df = pd.read_csv(log_path)
-    hybrid_stat_log_df = pd.read_csv(hybrid_stat_log_path)
-    hybrid_nn_log_df = pd.read_csv(hybrid_nn_log_path)
-    if only_L1:
-        L1_log_df = pd.read_csv(L1_log_path)
+    hybrid_log_df = pd.read_csv(hybrid_log_path)
 
     log_by_users = log_df.groupby(['user_id'])
-    hybrid_stat_log_by_users = hybrid_stat_log_df.groupby(['user_id'])
-    hybrid_nn_log_by_users = hybrid_nn_log_df.groupby(['user_id'])
-    if only_L1:
-        L1_log_by_users = L1_log_df.groupby(['user_id'])
-
+    hybrid_log_by_users = hybrid_log_df.groupby(['user_id'])
     user_ids = log_df.user_id.unique()
+    seeds = log_df['train seed'].unique()
 
-    with open(auc_path, 'w', newline='') as file_out:
+    with open(results_path, 'w', newline='') as file_out:
+        header = ['train frac',
+                  'user_id',
+                  'instances',
+                  'train seed',
+                  'comp range',
+                  'acc range',
+                  'h1 acc']
+        for model_name in model_names:
+            header += [model_name+' area']
         writer = csv.writer(file_out)
-        # writer.writerow(['train frac', 'user_id', 'instances', 'cos sim', 'train seed', 'comp range', 'acc range',
-        #                  'h1 acc', 'no hist area', 'L0 area', 'L1 area', 'L2 area', 'hybrid_stat area', 'hybrid_nn area'])
-        writer.writerow(['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range',
-                         'h1 acc', 'no hist area', 'L0 area', 'L1 area', 'L2 area', 'hybrid_stat area',
-                         'hybrid_nn area'])
+        writer.writerow(header)
 
         user_count = 0
         for user_id in user_ids:
@@ -273,205 +286,169 @@ def area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_di
             print(str(user_count)+'/'+str(len(user_ids)) + ' user ' + str(user_id))
 
             user_log = log_by_users.get_group(user_id).reset_index(drop=True)
-            user_hybrid_stat_log = hybrid_stat_log_by_users.get_group(user_id).reset_index(drop=True)
-            user_hybrid_nn_log = hybrid_nn_log_by_users.get_group(user_id).reset_index(drop=True)
-            if only_L1:
-                user_L1_log = L1_log_by_users.get_group(user_id).reset_index(drop=True)
+            user_hybrid_log = hybrid_log_by_users.get_group(user_id).reset_index(drop=True)
 
-            x = user_log.loc[0]
+            # user_log = log_by_users.get_group(user_id).groupby('diss weight').mean().reset_index(drop=True)
+            # user_hybrid_log = hybrid_log_by_users.get_group(user_id).groupby('std offset').mean().reset_index(drop=True)
 
-            history_len = x['instances']
-            seed = x['train seed']
-            com_range = x['comp range']
-            auc_range = x['acc range']
-            h1_acc = x['h1 acc']
+            for seed in seeds:
+                first_row_of_user = user_log.loc[0]
+                history_len = first_row_of_user['instances']
+                # seed = first_row_of_user['train seed']
+                com_range = first_row_of_user['comp range']
+                auc_range = first_row_of_user['acc range']
+                h1_acc = first_row_of_user['h1 acc']
 
-            # sim = '%.4f' % (user_hybrid_stat_log.loc[0]['sim'],)
+                # sim = '%.4f' % (user_hybrid_stat_log.loc[0]['sim'],)
 
-            row = [x['train frac'],
-                   str(user_id),
-                   history_len,
-                   # sim,
-                   seed,
-                   com_range,
-                   auc_range,
-                   h1_acc]
+                row = [
+                    first_row_of_user['train frac'],
+                    str(user_id),
+                    history_len,
+                    # sim,
+                    seed,
+                    com_range,
+                    auc_range,
+                    h1_acc]
 
-            no_hist_x = user_log['no hist x'].tolist()
-            no_hist_y = user_log['no hist y'].tolist()
-            L0_x = user_log['L0 x'].tolist()
-            L0_y = user_log['L0 y'].tolist()
-            if not only_L1:
-                L1_x = user_log['L1 x'].tolist()
-                L1_y = user_log['L1 y'].tolist()
-            else:
-                L1_x = user_L1_log['L1 x'].tolist()
-                L1_y = user_L1_log['L1 y'].tolist()
-            L2_x = user_log['L2 x'].tolist()
-            L2_y = user_log['L2 y'].tolist()
-            hybrid_stat_x = user_hybrid_stat_log['hybrid x'].tolist()
-            hybrid_stat_y = user_hybrid_stat_log['hybrid y'].tolist()
-            hybrid_nn_x = user_hybrid_nn_log['hybrid x'].tolist()
-            hybrid_nn_y = user_hybrid_nn_log['hybrid y'].tolist()
+                models_x = []
+                models_y = []
+                for model_name in model_names:
+                    if 'hybrid' not in model_name:
+                        log = user_log
+                    else:
+                        log = user_hybrid_log
+                    log = log.loc[log['train seed'] == seed]
+                    models_x += [log[model_name+' x'].tolist()]
+                    models_y += [log[model_name+' y'].tolist()]
 
-            min_x = min(user_log[['no hist x', 'L0 x', 'L1 x', 'L2 x']].values.min(),
-                        user_hybrid_stat_log['hybrid x'].values.min(),
-                        user_hybrid_nn_log['hybrid x'].values.min())
+                min_x = min(min(i) for i in models_x)
 
-            mono_no_hist_x = [min_x] + no_hist_x.copy()
-            mono_no_hist_y = [no_hist_y[0]] + no_hist_y.copy()
-            mono_L0_x = [min_x] + L0_x.copy()
-            mono_L0_y = [L0_y[0]] + L0_y.copy()
-            mono_L1_x = [min_x] + L1_x.copy()
-            mono_L1_y = [L1_y[0]] + L1_y.copy()
-            mono_L2_x = [min_x] + L2_x.copy()
-            mono_L2_y = [L2_y[0]] + L2_y.copy()
-            mono_hybrid_stat_x = [min_x] + hybrid_stat_x.copy()
-            mono_hybrid_stat_y = [hybrid_stat_y[0]] + hybrid_stat_y.copy()
-            mono_hybrid_nn_x = [min_x] + hybrid_nn_x.copy()
-            mono_hybrid_nn_y = [hybrid_nn_y[0]] + hybrid_nn_y.copy()
-
-            mono_xs = [mono_no_hist_x, mono_L0_x, mono_L1_x, mono_L2_x, mono_hybrid_stat_x, mono_hybrid_nn_x]
-            mono_ys = [mono_no_hist_y, mono_L0_y, mono_L1_y, mono_L2_y, mono_hybrid_stat_y, mono_hybrid_nn_y]
-
-            for i in range(len(mono_xs)):
-                make_monotonic(mono_xs[i], mono_ys[i])
-
-            if cut_by_min:
-                cutoff_x = 1
-                for mono_x in mono_xs:
-                    max_mono_x = max(mono_x)
-                    cutoff_x = min(cutoff_x, max_mono_x)
+                mono_xs = [[min_x] + i.copy() for i in models_x]
+                mono_ys = [[i[0]] + i.copy() for i in models_y]
 
                 for i in range(len(mono_xs)):
-                    cutoff(mono_xs[i], mono_ys[i], cutoff_x)
+                    make_monotonic(mono_xs[i], mono_ys[i])
 
-            mono_no_hist_x += [mono_no_hist_x[-1], 1]
-            mono_no_hist_y += [h1_acc, h1_acc]
-            mono_L0_x += [mono_L0_x[-1], 1]
-            mono_L0_y += [h1_acc, h1_acc]
-            mono_L1_x += [mono_L1_x[-1], 1]
-            mono_L1_y += [h1_acc, h1_acc]
-            mono_L2_x += [mono_L2_x[-1], 1]
-            mono_L2_y += [h1_acc, h1_acc]
-            mono_hybrid_stat_x += [mono_hybrid_stat_x[-1], 1]
-            mono_hybrid_stat_y += [h1_acc, h1_acc]
-            mono_hybrid_nn_x += [mono_hybrid_nn_x[-1], 1]
-            mono_hybrid_nn_y += [h1_acc, h1_acc]
+                if cut_by_min:
+                    cutoff_x = 1
+                    for mono_x in mono_xs:
+                        max_mono_x = max(mono_x)
+                        cutoff_x = min(cutoff_x, max_mono_x)
 
-            h1_area = (1 - min_x) * h1_acc
-            no_hist_area = auc(mono_no_hist_x, mono_no_hist_y) - h1_area
-            L0_area = auc(mono_L0_x, mono_L0_y) - h1_area
-            L1_area = auc(mono_L1_x, mono_L1_y) - h1_area
-            L2_area = auc(mono_L2_x, mono_L2_y) - h1_area
-            hybrid_stat_area = auc(mono_hybrid_stat_x, mono_hybrid_stat_y) - h1_area
-            hybrid_nn_area = auc(mono_hybrid_nn_x, mono_hybrid_nn_y) - h1_area
+                    for i in range(len(mono_xs)):
+                        cutoff(mono_xs[i], mono_ys[i], cutoff_x)
 
-            row += [no_hist_area, L0_area, L1_area, L2_area, hybrid_stat_area, hybrid_nn_area]
-            writer.writerow(row)
+                h1_area = (1 - min_x) * h1_acc
 
-            h1_x = [min_x, 1]
-            h1_y = [h1_acc, h1_acc]
-            plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
-            plt.text(min_x, h1_acc * 1.005, 'h1')
+                areas = [auc(mono_xs[i] + [mono_xs[i][-1], 1], mono_ys[i] + [h1_acc, h1_acc]) - h1_area
+                         for i in range(len(mono_xs))]
+                writer.writerow(row + areas)
 
-            if not skip_L_models:
-                if not only_L1:
-                    plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=22,
-                             label='h2 not using history')
-                    plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=18,
-                             label='h2 hybrid stat')
-                    plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=18,
-                             label='h2 hybrid nn')
-                    plt.plot(L0_x, L0_y, 'r', marker='.', linewidth=3, markersize=14,
-                             label='h2 using L0')
-                    plt.plot(L1_x, L1_y, 'm', marker='.', linewidth=3, markersize=10,
-                             label='h2 using L1')
-                    plt.plot(L2_x, L2_y, 'orange', marker='.', linewidth=3, markersize=6,
-                             label='h2 using L2')
-                else:
-                    plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=18,
-                             label='h2 not using history')
-                    plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=16,
-                             label='h2 hybrid stat')
-                    plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=14,
-                             label='h2 hybrid nn')
-                    plt.plot(L1_x, L1_y, 'm', marker='.', linewidth=3, markersize=12,
-                             label='h2 using L1')
-            else:
-                plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=18,
-                         label='h2 not using history')
-                plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=16,
-                         label='h2 hybrid stat')
-                plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=14,
-                         label='h2 hybrid nn')
+    auc_summary(results_path, results_path.replace('auc', 'auc_summary'))
 
-            plt.xlabel('compatibility')
-            plt.ylabel('accuracy')
-            # plt.legend()
+    # h1_x = [min_x, 1]
+    # h1_y = [h1_acc, h1_acc]
+    # plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+    # plt.text(min_x, h1_acc * 1.005, 'h1')
 
-            # plt.title(
-            #     'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' + str(x['train frac'])
-            #     + ' sim=' + sim + '\n\n')
-
-            plt.title(
-                'user=' + str(user_id) + ' hist_len=' + str(int(history_len)) + ' split=' + str(x['train frac']) + '\n\n')
-
-            areas = [no_hist_area, hybrid_stat_area, hybrid_nn_area]
-            col_labels = ['no hist', 'hybrid stat', 'hybrid nn']
-            colors = ['b', 'g', 'seagreen']
-            if not skip_L_models:
-                if not only_L1:
-                    areas = [no_hist_area, L0_area, L1_area, L2_area, hybrid_stat_area, hybrid_nn_area]
-                    col_labels = ['no hist', 'L0', 'L1', 'L2', 'hybrid stat', 'hybrid nn']
-                    colors = ['b', 'r', 'm', 'orange', 'g', 'seagreen']
-                else:
-                    areas = [no_hist_area, L1_area, hybrid_stat_area, hybrid_nn_area]
-                    col_labels = ['no hist', 'L1', 'hybrid stat', 'hybrid nn']
-                    colors = ['b', 'm', 'g', 'seagreen']
-
-
-            cell_text = [(['%1.4f' % (area) for area in areas])]
-            row_labels = ['area']
-
-            table = plt.table(cellText=cell_text, rowLabels=row_labels, colColours=colors, colLabels=col_labels,
-                              loc='top', cellLoc='center')
-            table.scale(1, 1.2)
-            plt.subplots_adjust(top=0.85)
-
-            xs = [mono_no_hist_x, mono_hybrid_stat_x, mono_hybrid_nn_x]
-            ys = [mono_no_hist_y, mono_hybrid_stat_y, mono_hybrid_nn_y]
-            if not skip_L_models:
-                if not only_L1:
-                    xs = [mono_no_hist_x, mono_L0_x, mono_L1_x, mono_L2_x, mono_hybrid_stat_x, mono_hybrid_nn_x]
-                    ys = [mono_no_hist_y, mono_L0_y, mono_L1_y, mono_L2_y, mono_hybrid_stat_y, mono_hybrid_nn_y]
-                else:
-                    xs = [mono_no_hist_x, mono_L1_x, mono_hybrid_stat_x, mono_hybrid_nn_x]
-                    ys = [mono_no_hist_y, mono_L1_y, mono_hybrid_stat_y, mono_hybrid_nn_y]
-
-
-            for i in range(len(xs)):
-                x = xs[i]
-                y = ys[i]
-                plt.fill_between(x, [h1_acc] * len(x), y, facecolor=colors[i], alpha=0.2)
-
-            # plt.savefig(
-            #     plots_dir + '\\by_hist_length\\len_' + str(history_len) + '_student_' + str(
-            #         user_id) + '.png')
-            # plt.savefig(
-            #     plots_dir + '\\by_accuracy_range\\acc_' + '%.4f' % (auc_range,) + '_student_' + str(
-            #         user_id) + '.png')
-            # plt.savefig(
-            #     plots_dir + '\\by_compatibility_range\\com_' + '%.4f' % (
-            #     com_range,) + '_student_' + str(
-            #         user_id) + '.png')
-            # plt.savefig(
-            #     plots_dir + '\\by_user_id\\student_' + str(user_id) + '_seed_' + str(seed) + '.png')
-
-            plt.savefig(
-                plots_dir + '\\plots\\student_' + str(user_id) + '.png')
-            # plt.show()
-            plt.clf()
+    # if not skip_L_models:
+    #     if not only_L1:
+    #         plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=22,
+    #                  label='h2 not using history')
+    #         plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=18,
+    #                  label='h2 hybrid stat')
+    #         plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=18,
+    #                  label='h2 hybrid nn')
+    #         plt.plot(L0_x, L0_y, 'r', marker='.', linewidth=3, markersize=14,
+    #                  label='h2 using L0')
+    #         plt.plot(L1_x, L1_y, 'm', marker='.', linewidth=3, markersize=10,
+    #                  label='h2 using L1')
+    #         plt.plot(L2_x, L2_y, 'orange', marker='.', linewidth=3, markersize=6,
+    #                  label='h2 using L2')
+    #     else:
+    #         plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=18,
+    #                  label='h2 not using history')
+    #         plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=16,
+    #                  label='h2 hybrid stat')
+    #         plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=14,
+    #                  label='h2 hybrid nn')
+    #         plt.plot(L1_x, L1_y, 'm', marker='.', linewidth=3, markersize=12,
+    #                  label='h2 using L1')
+    # else:
+    #     plt.plot(no_hist_x, no_hist_y, 'b', marker='.', linewidth=3, markersize=18,
+    #              label='h2 not using history')
+    #     plt.plot(hybrid_stat_x, hybrid_stat_y, 'g', marker='.', linewidth=3, markersize=16,
+    #              label='h2 hybrid stat')
+    #     plt.plot(hybrid_nn_x, hybrid_nn_y, 'seagreen', marker='.', linewidth=3, markersize=14,
+    #              label='h2 hybrid nn')
+    #
+    # plt.xlabel('compatibility')
+    # plt.ylabel('accuracy')
+    # # plt.legend()
+    #
+    # # plt.title(
+    # #     'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' + str(x['train frac'])
+    # #     + ' sim=' + sim + '\n\n')
+    #
+    # plt.title(
+    #     'user=' + str(user_id) + ' hist_len=' + str(int(history_len)) + ' split=' + str(first_row_of_user['train frac']) + '\n\n')
+    #
+    # areas = [no_hist_area, hybrid_stat_area, hybrid_nn_area]
+    # col_labels = ['no hist', 'hybrid stat', 'hybrid nn']
+    # colors = ['b', 'g', 'seagreen']
+    # if not skip_L_models:
+    #     if not only_L1:
+    #         areas = [no_hist_area, L0_area, L1_area, L2_area, hybrid_stat_area, hybrid_nn_area]
+    #         col_labels = ['no hist', 'L0', 'L1', 'L2', 'hybrid stat', 'hybrid nn']
+    #         colors = ['b', 'r', 'm', 'orange', 'g', 'seagreen']
+    #     else:
+    #         areas = [no_hist_area, L1_area, hybrid_stat_area, hybrid_nn_area]
+    #         col_labels = ['no hist', 'L1', 'hybrid stat', 'hybrid nn']
+    #         colors = ['b', 'm', 'g', 'seagreen']
+    #
+    #
+    # cell_text = [(['%1.4f' % (area) for area in areas])]
+    # row_labels = ['area']
+    #
+    # table = plt.table(cellText=cell_text, rowLabels=row_labels, colColours=colors, colLabels=col_labels,
+    #                   loc='top', cellLoc='center')
+    # table.scale(1, 1.2)
+    # plt.subplots_adjust(top=0.85)
+    #
+    # xs = [mono_no_hist_x, mono_hybrid_stat_x, mono_hybrid_nn_x]
+    # ys = [mono_no_hist_y, mono_hybrid_stat_y, mono_hybrid_nn_y]
+    # if not skip_L_models:
+    #     if not only_L1:
+    #         xs = [mono_no_hist_x, mono_L0_x, mono_L1_x, mono_L2_x, mono_hybrid_stat_x, mono_hybrid_nn_x]
+    #         ys = [mono_no_hist_y, mono_L0_y, mono_L1_y, mono_L2_y, mono_hybrid_stat_y, mono_hybrid_nn_y]
+    #     else:
+    #         xs = [mono_no_hist_x, mono_L1_x, mono_hybrid_stat_x, mono_hybrid_nn_x]
+    #         ys = [mono_no_hist_y, mono_L1_y, mono_hybrid_stat_y, mono_hybrid_nn_y]
+    #
+    #
+    # for i in range(len(xs)):
+    #     first_row_of_user = xs[i]
+    #     y = ys[i]
+    #     plt.fill_between(first_row_of_user, [h1_acc] * len(first_row_of_user), y, facecolor=colors[i], alpha=0.2)
+    #
+    # # plt.savefig(
+    # #     plots_dir + '\\by_hist_length\\len_' + str(history_len) + '_student_' + str(
+    # #         user_id) + '.png')
+    # # plt.savefig(
+    # #     plots_dir + '\\by_accuracy_range\\acc_' + '%.4f' % (auc_range,) + '_student_' + str(
+    # #         user_id) + '.png')
+    # # plt.savefig(
+    # #     plots_dir + '\\by_compatibility_range\\com_' + '%.4f' % (
+    # #     com_range,) + '_student_' + str(
+    # #         user_id) + '.png')
+    # # plt.savefig(
+    # #     plots_dir + '\\by_user_id\\student_' + str(user_id) + '_seed_' + str(seed) + '.png')
+    #
+    # plt.savefig(
+    #     results_path + '\\plots\\student_' + str(user_id) + '.png')
+    # # plt.show()
+    # plt.clf()
 
 
 def join_sim_and_auc():
@@ -530,24 +507,16 @@ def get_fixed_std(df_model, h1_mean_acc, users_h1_accs, weighted=False):
     return df_fixed.groupby('position').std()['y']
 
 
-def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
+def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users,
                                   user_type='users', save_user_id='', simple_plots=False, weighted=True):
-
-    model_names = [
-        'L0',
-        'L1',
-        'L2',
-        'L3',
-        'hybrid',
-        'no hist'
-    ]
     labels_dict = {
-        'no hist': 'post-update',
+        'no hist': 'baseline',
         'L0': 'L0',
         'L1': 'L1',
         'L2': 'L2',
         'L3': 'L3',
-        'hybrid': 'hybrid'
+        'hybrid': 'hybrid',
+        'full_hybrid': 'full_hybrid'
     }
     colors_dict = {
         'no hist': 'k',
@@ -555,10 +524,31 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
         'L1': 'purple',
         'L2': 'orange',
         'L3': 'r',
-        'hybrid': 'g'
+        'hybrid': 'g',
+        'full_hybrid': 'c'
+    }
+    markers_dict = {
+        'no hist': '.',
+        'L0': 'v',
+        'L1': '^',
+        'L2': '<',
+        'L3': '>',
+        'hybrid': 's',
+        'full_hybrid': 'o'
+    }
+    markersizes_dict = {
+        'no hist': 4,
+        'L0': 6,
+        'L1': 6,
+        'L2': 6,
+        'L3': 6,
+        'hybrid': 4,
+        'full_hybrid': 4
     }
     labels = [labels_dict[i] for i in model_names]
     colors = [colors_dict[i] for i in model_names]
+    markers = [markers_dict[i] for i in model_names]
+    markersizes = [markersizes_dict[i] for i in model_names]
 
     log_df = pd.read_csv(log_path)
     hybrid_log_df = pd.read_csv(hybrid_log_path)
@@ -572,6 +562,8 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
 
     user_count = 0
     for user_id in user_ids:
+        if user_id in skip_users:
+            continue
         user_count += 1
         print(str(user_count) + '/' + str(len(user_ids)) + ' user ' + str(user_id))
 
@@ -586,7 +578,8 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
         for model_name in model_names:
             log = user_log
             positions = range(len(log))
-            if model_name == 'hybrid':
+            # if model_name == 'hybrid':
+            if 'hybrid' in model_name:
                 log = user_hybrid_log
                 positions = reversed(range(len(log)))
             merged_df = merged_df.append(pd.DataFrame({'model': model_name, 'user': user_id, 'size':size, 'position': positions,
@@ -623,19 +616,34 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
     h1_x = [min_x, max_x]
     h1_y = [h1_acc_mean, h1_acc_mean]
 
+    linewidth = 2
+    h1_marker_size = 8
+    marker_delta = 0
+
     if simple_plots:
-        linewidth = 12
-        markersize = 40
-        plot_alpha = 1
+        linewidth = 4
+        h1_marker_size = 20
+        marker_delta = 6
+        matplotlib.rcParams.update({'font.size': 22})
 
-        for i in range(len(model_names)):
-            plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i], linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
-        plt.plot(h1_x, h1_y, 'k--', marker='.', linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
+    for i in range(len(model_names)):
+        plt.plot(models_x[i], models_y[i], colors[i], marker=markers[i], markersize=markersizes[i] + marker_delta
+                 , label=labels[i], linewidth=linewidth)
+    plt.plot(h1_x, h1_y, 'k--', marker='.', linewidth=linewidth, markersize=h1_marker_size, label='pre-update')
 
-    else:
-        for i in range(len(model_names)):
-            plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i])
-        plt.plot(h1_x, h1_y, 'k--', marker='.', label='pre-update')
+    # if simple_plots:
+    #     linewidth = 12
+    #     markersize = 40
+    #     plot_alpha = 1
+    #
+    #     for i in range(len(model_names)):
+    #         plt.plot(models_x[i], models_y[i], colors[i], marker='.', label=labels[i], linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
+    #     plt.plot(h1_x, h1_y, 'k--', marker='.', linewidth=linewidth, markersize=markersize, alpha=plot_alpha)
+    #
+    # else:
+    #     for i in range(len(model_names)):
+    #         plt.plot(models_x[i], models_y[i], colors[i], marker=markers[i], markersize=markersizes[i], label=labels[i])
+    #     plt.plot(h1_x, h1_y, 'k--', marker='.', label='pre-update')
 
     if not simple_plots:
         xlabel = 'compatibility'
@@ -645,10 +653,16 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
         plt.legend(loc='lower left')
         plt.grid()
 
-        delimiter = ' = '
+        # delimiter = ' = '
+        # if save_user_id == '':
+        #     title = '%s%s' % (user_type
+        # else:
+        #     title = '%s = %s, n = %d' % (user_type, save_user_id, size)
+
         if save_user_id == '':
-            delimiter = ''
-        title = '%s%s%s, n = %d' % (user_type, delimiter, save_user_id, size)
+            title = 'average plots for users = %s' % (user_type)
+        else:
+            title = '%s = %s, n = %d' % (user_type, save_user_id, size)
         plt.title(title)
 
         # plot std
@@ -671,16 +685,16 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
     #     fig_size = fig.get_size_inches()
     #     plt.text(fig_size[0]/2, fig_size[1]/2, str(size), verticalalignment='top', horizontalalignment='center')
 
-    delimiter = '_'
     if save_user_id == '':
-        delimiter = ''
-    file_name = 'average_plot_%s%s%s' % (user_type, delimiter, save_user_id)
-
-    if simple_plots:
-        plt.axis('off')
-        plt.savefig(results_dir + '\\' + file_name + '.png', bbox_inches=0)
+        file_name = 'average_plot_%s' % (user_type)
     else:
-        plt.savefig(results_dir + '\\'+file_name+'.png')
+        file_name = 'len_%d_user_%s' % (size, save_user_id)
+
+    # if simple_plots:
+    #     # plt.axis('off')
+    #     matplotlib.rcParams.update({'font.size': 22})
+
+    plt.savefig(results_dir + '\\'+file_name+'.png', bbox_inches=0)
     plt.show()
     plt.clf()
 
@@ -919,96 +933,84 @@ def drop_rows_with_string():
                 if not '?' in line:
                     file_out.write(line)
 
+skip_users = []
 
-# drop_rows_with_string()
-# exit()
+# dataset_name = 'salaries'
+# version = 'full hybrid\\'
+# # user_types = ['all']
+# user_types = ['relationship']
+# # user_types = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+# # skip_users = ['Husband']
 
-# def helping_kobi():
-#     encoded = '╫£╫ס╫ש╫נ ╫נ╫ש╫á╫ר╫ע╫¿╫ª╫ש╫פ ╫ץ╫á╫ש╫¬╫ץ╫ק ╫₧╫ó╫¿╫¢╫ץ╫¬ ╫ס╫ó"╫₧'
-#     decoded = 'חברת החשמל לישראל בעמ'
-#     print(string)
-
-plot = False
-if plot:
-    # log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
-    # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid stat\\hybrid_log.csv'
-    # hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid nn\\regularization 0\\hybrid_log.csv'
-    # plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\e-learning'
-
-    log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\merged_log.csv'
-    hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_stat_log.csv'
-    hybrid_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\hybrid_nn_log.csv'
-    L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\mallzee\\balanced\\merged\\L1_log.csv'
-    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee'
-
-    if not os.path.exists(plots_dir+'\\plots'):
-        os.makedirs(plots_dir+'\\plots')
-
-    area_calculator(log_path, hybrid_stat_log_path, hybrid_log_path, plots_dir, skip_L_models=True)
-    # area_calculator(log_path, hybrid_stat_log_path, hybrid_nn_log_path, plots_dir, L1_log_path, only_L1=True, cut_by_min=True)
-
-avg = True
-if avg:
-    dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\salaries\\'
-    version = 'all models\\'
-    # user_types = ['all']
-    user_types = ['relationship']
-    # user_types = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-
-    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
-    # version = '80 split [10] h1 500 h2 200 epochs\\'
-    # user_types = ['race']
-    # # user_types = ['race', 'sex', 'age_cat', 'c_charge_degree', 'score_text']
-
-    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic\\'
-    # version = '80 split [] epochs h1 500 h2 800\\'
-    # user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
-
-    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mooc\\'
-    # version = 'all models\\'
-    # user_types = ['forum_uid']
-
-    # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\assistment\\'
-    # version = '80 split [50]\\'
-    # user_types = ['user_id']
-
-    individual_users = True
-    only_split_users = False
-
-    for user_type in user_types:
-        user_type_dir = dataset + version + user_type + '\\'
-        log_path = user_type_dir + 'log.csv'
-        hybrid_log_path = user_type_dir + 'hybrid_log.csv'
-
-        if only_split_users:
-            by_user_id_dir = '%s\\log_by_user\\' % user_type_dir
-            safe_make_dir(by_user_id_dir)
-            split_users(log_path, hybrid_log_path, by_user_id_dir)
-            continue
-
-        if not individual_users:
-            results_dir = dataset + version + 'averaged plots\\by user type'
-            safe_make_dir(results_dir)
-            plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir,
-                                          user_type=user_type)
-        else:
-            results_dir = dataset + version + 'averaged plots\\by user\\%s' % user_type
-            safe_make_dir(results_dir)
-            user_ids = pd.unique(pd.read_csv(log_path)['user_id'])
-            for user_id in user_ids:
-                user_log_path = '%slog_by_user\\%s_log.csv' % (user_type_dir, user_id)
-                user_hybrid_log_path = '%slog_by_user\\%s_hybrid_log.csv' % (user_type_dir, user_id)
-                plots_averaged_over_all_users(user_log_path, user_hybrid_log_path, results_dir,
-                                              user_type=user_type, save_user_id=user_id, weighted=False,
-                                              simple_plots=False)
+# dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
+# version = '80 split [10] h1 500 h2 200 epochs\\'
+# user_types = ['race']
+# # user_types = ['race', 'sex', 'age_cat', 'c_charge_degree', 'score_text']
 
 # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic\\'
-# version = '80 split [] epochs h1 500 h2 800'
+# version = '80 split [] epochs h1 500 h2 800\\'
 # user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
-#
-# merge_csv_parts(dataset+version, user_types)
 
-# log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
-    # L1_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1\\merged_log.csv'
-    # hybrid_stat_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid stat\\hybrid_log.csv'
-    # hybrid_nn_log_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plot archive\\ASSISTments_2010\\random split\\1 hybrid nn\\regularization 0\\hybrid_log.csv'
+# dataset_name = 'mooc'
+# version = '80 split []\\'
+# user_types = ['forum_uid']
+
+# dataset_name = 'assistment'
+# version = '80 split [50]\\'
+# user_types = ['user_id']
+
+dataset_name = 'abalone'
+version = '80 split [5]\\'
+user_types = ['sex']
+
+# dataset_name = 'hospital_mortality'
+# version = '80 split []\\'
+# user_types = ['MARITAL_STATUS']
+
+individual_users = False
+only_split_users = False
+compute_auc = False
+
+dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s\\' % dataset_name
+
+model_names = [
+    'no hist',
+    # 'L0',
+    # 'L1',
+    # 'L2',
+    'L3',
+    'hybrid',
+    # 'full_hybrid'
+]
+
+for user_type in user_types:
+    user_type_dir = dataset + version + user_type + '\\'
+    log_path = user_type_dir + 'log.csv'
+    hybrid_log_path = user_type_dir + 'hybrid_log.csv'
+
+    if compute_auc:
+        # auc_summary(user_type_dir + 'auc.csv', user_type_dir + 'auc_summary.csv')
+        area_calculator(log_path, hybrid_log_path, '%sauc.csv' % user_type_dir, model_names)
+        continue
+
+    if only_split_users:
+        by_user_id_dir = '%s\\log_by_user\\' % user_type_dir
+        safe_make_dir(by_user_id_dir)
+        split_users(log_path, hybrid_log_path, by_user_id_dir)
+        continue
+
+    if not individual_users:
+        results_dir = dataset + version + 'averaged plots\\by user type'
+        safe_make_dir(results_dir)
+        plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users,
+                                      user_type=user_type, simple_plots=True)
+    else:
+        results_dir = dataset + version + 'averaged plots\\by user\\%s' % user_type
+        safe_make_dir(results_dir)
+        user_ids = pd.unique(pd.read_csv(log_path)['user_id'])
+        for user_id in user_ids:
+            user_log_path = '%slog_by_user\\%s_log.csv' % (user_type_dir, user_id)
+            user_hybrid_log_path = '%slog_by_user\\%s_hybrid_log.csv' % (user_type_dir, user_id)
+            plots_averaged_over_all_users(user_log_path, user_hybrid_log_path, results_dir, model_names, skip_users,
+                                          user_type=user_type, save_user_id=user_id, weighted=False,
+                                          simple_plots=True)
