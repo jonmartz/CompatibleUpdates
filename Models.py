@@ -122,9 +122,11 @@ class NeuralNetwork:
             weights += [tf.Variable(initial_weights[i], name='weights_'+str(i+1))]
             biases += [tf.Variable(initial_biases[i], name='biases_'+str(i+1))]
             if i == 0:
-                activations += [tf.sigmoid((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
+                activations += [tf.nn.relu((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
+                # activations += [tf.sigmoid((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
             else:
-                activations += [tf.sigmoid((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
+                activations += [tf.nn.relu((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
+                # activations += [tf.sigmoid((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
 
         weights += [tf.Variable(initial_weights[-1], name='weights_' + str(len(layers) + 1))]
         biases += [tf.Variable(initial_biases[-1], name='biases_' + str(len(layers) + 1))]

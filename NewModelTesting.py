@@ -138,14 +138,14 @@ target_col = 'salary'
 original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
 # user_categs = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
 skip_cols = ['fnlgwt']
-user_categs = ['relationship']
+user_cols = ['relationship']
 skip_users = []
 only_users = ['Wife']
 df_max_size = -1
 layers = []
-history_train_fraction = 0.8
+train_frac = 0.8
 h1_train_size = 200
-h2_train_size = 5000
+h2_train_len = 5000
 h1_epochs = 500
 h2_epochs = 200
 
@@ -237,12 +237,12 @@ h2_epochs = 200
 
 only_train_h1 = False
 
-test_size = int(h2_train_size * (1-history_train_fraction))
+# test_size = int(h2_train_len * (1 - train_frac))
 batch_size = 128
 regularization = 0
 
-# seeds = range(2)
-seeds = [2, 3]
+seeds = range(5)
+# seeds = [2, 3]
 
 # noinspection PyUnboundLocalVariable
 
@@ -266,10 +266,10 @@ diss_weights = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x/10 for x in range_stds))
 
-min_history_size = 0
-max_history_size = 100000
+min_hist_len = 0
+max_hist_len = 100000
 current_user_count = 0
-user_max_count = 15
+max_user_count = 15
 
 model_names = [
     'no hist',
@@ -300,7 +300,7 @@ for model_name in model_names:
 if only_hybrid:
     diss_weights = [0]
 
-split_by_chronological_order = False
+chrono_split = False
 copy_h1_weights = False
 balance_histories = True
 
@@ -312,32 +312,32 @@ plot_confusion = False
 only_h2_weights = False
 
 # skip cols
-user_categs_not_skipped = []
-for categ in user_categs:
-    if categ not in skip_cols:
-        user_categs_not_skipped += [categ]
+user_cols_not_skipped = []
+for user_col in user_cols:
+    if user_col not in skip_cols:
+        user_cols_not_skipped += [user_col]
 
 original_categs_not_skipped = []
 for categ in original_categ_cols:
     if categ not in skip_cols:
         original_categs_not_skipped += [categ]
 
-user_categs = user_categs_not_skipped
+user_cols = user_cols_not_skipped
 original_categ_cols = original_categs_not_skipped
 
 full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' % (dataset, dataset)
 results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s" % dataset
 
-for user_categ in user_categs:
+for user_col in user_cols:
 
-    user_group_names = [user_categ]
+    # user_group_names = [user_categ]
     categ_cols = original_categ_cols.copy()
     try:
-        categ_cols.remove(user_categ)
+        categ_cols.remove(user_col)
     except ValueError:
         pass
 
-    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots\\' + user_categ
+    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots\\' + user_col
     if os.path.exists(plots_dir):
         shutil.rmtree(plots_dir)
     else:
@@ -361,29 +361,20 @@ for user_categ in user_categs:
             log_writer.writerow(log_header)
             hybrid_log_writer.writerow(hybrid_log_header)
 
-    # if 'hybrid' in model_names:
-    #     with open(plots_dir + '\\hybrid_log.csv', 'w', newline='') as hybrid_log_file:
-    #         hybrid_log_writer = csv.writer(hybrid_log_file)
-    #         hybrid_log_header = ['train frac', 'user_id', 'instances', 'train seed', 'std offset', 'hybrid x', 'hybrid y']
-    #         hybrid_log_writer.writerow(hybrid_log_header)
-
     print('loading data...')
-    df_full = pd.read_csv(full_dataset_path)
+    dataset_full = pd.read_csv(full_dataset_path)
     if df_max_size >= 0:
-        df_full = df_full[:df_max_size]
+        dataset_full = dataset_full[:df_max_size]
 
     for col in skip_cols:
-        try:
-            del df_full[col]
-        except:
-            pass
+        del dataset_full[col]
 
     # get column groups in ohe df for each column in original df
     col_groups_dict = {}
-    categs_unique_values = df_full[categ_cols].nunique()
+    categs_unique_values = dataset_full[categ_cols].nunique()
     i = 0
-    for col in df_full.columns:
-        if col in [user_categ, target_col]:
+    for col in dataset_full.columns:
+        if col in [user_col, target_col]:
             continue
         unique_count = 1
         if col in categ_cols:
@@ -394,473 +385,540 @@ for user_categ in user_categs:
     # one hot encoding
     print('pre-processing data... ')
     ohe = ce.OneHotEncoder(cols=categ_cols, use_cat_names=True)
-    df_full = ohe.fit_transform(df_full)
-    print('num columns = %d'%df_full.shape[1])
+    dataset_full = ohe.fit_transform(dataset_full)
+    print('num columns = %d' % dataset_full.shape[1])
 
     print('splitting into train and test sets...')
 
     # create user groups
-    user_groups_train = []
-    user_groups_test = []
-    for user_group_name in user_group_names:
-        user_groups_test += [df_full.groupby([user_group_name])]
+    # user_groups_train = []
+    # user_groups_test = []
+    # for user_group_name in user_group_names:
+    #     user_groups_test += [df_full.groupby([user_group_name])]
+
+    # get all users histories
+
+    groups_by_user = dataset_full.groupby(user_col)
+    dataset_full = dataset_full.drop(columns=[user_col])
+    all_columns = list(dataset_full.columns)
+    del dataset_full
+
+    # get user histories
+    full_hists = {}
+    if len(only_users) == 0:
+        user_ids = only_users
+    else:
+        user_ids = list(groups_by_user.groups.keys())
+    for user_id in user_ids:
+        hist = groups_by_user.get_group(user_id).drop(columns=[user_col])
+        full_hists[user_id] = hist
+    # sort hists by len in descending order
+    sorted_full_hists = {k: v for k, v in reversed(sorted(full_hists.items(), key=lambda i: len(i[1])))}
+    del groups_by_user
+    del full_hists
+
+    # lists indexed by seed containing dicts:
+    hist_trains_by_seed = []
+    hist_tests_by_seed = []
+    h2_train_by_seed = []
+
+    # get hist train and test sets and train sets for h2
+    user_ids = []
+    for seed in seeds:
+        # take longest n histories such that train_frac * sum of lens <= h2 train size
+        hist_trains = {}
+        hist_tests = {}
+        h2_train = pd.DataFrame(columns=all_columns)
+        total_len = 0
+        for user_id, hist in sorted_full_hists.items():
+            if balance_histories:
+                target_groups = hist.groupby(target_col)
+                if len(target_groups) == 1:  # only one target label present in history: skip
+                    continue
+                hist = target_groups.apply(lambda x: x.sample(target_groups.size().min(), random_state=seed))
+                hist.index = hist.index.droplevel(0)
+
+            # attempt to add user hist
+            if min_hist_len <= len(hist) <= max_hist_len and train_frac*(total_len + len(hist)) <= h2_train_len:
+                user_ids += [user_id]
+
+                # split hist into train and test sets
+                if chrono_split:
+                    hist_train = hist[:int(len(hist) * train_frac) + 1]
+                else:
+                    hist_train = hist.sample(n=int(len(hist) * train_frac) + 1, random_state=seed)
+                hist_test = hist.drop(hist_train.index)
+
+                # add user hist
+                hist_trains[user_id] = hist_train.reset_index(drop=True)
+                hist_tests[user_id] = hist_test.reset_index(drop=True)
+                h2_train = h2_train.append(hist_train)
+                total_len += len(hist)
+                if train_frac*(total_len + min_hist_len) > h2_train_len:  # cannot add more users
+                    break
+        hist_trains_by_seed += [hist_trains]
+        hist_tests_by_seed += [hist_tests]
+        h2_train_by_seed += [h2_train.reset_index(drop=True)]
+    del sorted_full_hists
 
     # separate histories into training and test sets
-    students_group = user_groups_test[0]
-    if split_by_chronological_order:
-        df_train = students_group.apply(lambda x: x[:int(len(x) * history_train_fraction) + 1])
-    else:
-        df_train = students_group.apply(lambda x: x.sample(n=int(len(x) * history_train_fraction) + 1, random_state=1))
+    # students_group = user_groups_test[0]
+    #
+    # if split_by_chronological_order:
+    #     df_train = user_histories.apply(lambda x: x[:int(len(x) * history_train_fraction) + 1])
+    # else:
+    #     df_train = user_histories.apply(lambda x: x.sample(n=int(len(x) * history_train_fraction) + 1, random_state=1))
+    #
+    # df_train.index = df_train.index.droplevel(0)
+    # df_test = dataset_full.drop(df_train.index)
+    # user_groups_test[0] = df_test.groupby([user_group_names[0]])
+    # user_groups_train += [df_train.groupby([user_group_names[0]])]
+    # del df_train[user_group_names[0]]
+    # del df_test[user_group_names[0]]
+    #
+    # del dataset_full
+    #
+    # # balance sets
+    # print('balancing train set...')
+    #
+    # if balance_histories:
+    #
+    #     target_groups = df_train.groupby(target_col)
+    #     df_train = target_groups.apply(lambda x: x.sample(target_groups.size().min(), random_state=1))
+    #     df_train = df_train.reset_index(drop=True)
+    #
+    #     target_groups = df_test.groupby(target_col)
+    #     df_test = target_groups.apply(lambda x: x.sample(target_groups.size().min(), random_state=1))
+    #     df_test = df_test.reset_index(drop=True)
 
-    df_train.index = df_train.index.droplevel(0)
-    df_test = df_full.drop(df_train.index)
-    user_groups_test[0] = df_test.groupby([user_group_names[0]])
-    user_groups_train += [df_train.groupby([user_group_names[0]])]
-    del df_train[user_group_names[0]]
-    del df_test[user_group_names[0]]
+    # df_train_subsets_by_seed = []
 
-    del df_full
-
-    # balance sets
-    print('balancing train set...')
-
-    if balance_histories:
-
-        target_group = df_train.groupby(target_col)
-        df_train = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
-        df_train = df_train.reset_index(drop=True)
-
-        target_group = df_test.groupby(target_col)
-        df_test = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
-        df_test = df_test.reset_index(drop=True)
-
-    df_train_subsets_by_seed = []
+    h1_by_seed = []
+    h2s_no_hist_by_seed = []
+    # to separate h2 train sets into X and Y (target_col)
     Xs_by_seed = []
     Ys_by_seed = []
-    h1s_by_seed = []
-    h2s_not_using_history_by_seed = []
-    df_weights = pd.DataFrame(columns=['seed', 'model', 'diss_weight', 'col', 'weight'])
 
-    tests_group = {}
-    tests_group_user_ids = []
+    # tests_group = {}
+    # tests_group_user_ids = []
 
     if only_train_h1:
         print('\nusing cross validation\n')
-        train_sizes = [8000]
-        # train_sizes = [200, 5000]
-        h1_epochs = 1000
-        seeds = range(1)
-        n_features = int(df_train.shape[1])-1
-        layers = []
-        # layers = [int(n_features/2)]
-        # layers = [90, 40]
-        regularization = 0
         bottom, top = 0.4, 1.02
-        delta_train_size = 200
-    else:
-        train_sizes = [h1_train_size]
 
-    for h1_train_size in train_sizes:
+    #     delta_train_size = 200
+    #     train_sizes = [8000]
+    #     train_sizes = [200, 5000]
+    #     h1_epochs = 1000
+    #     seeds = range(1)
+    #     n_features = len(dataset_full.columns)-1
+    #     layers = []
+    #     layers = [int(n_features/2)]
+    #     layers = [90, 40]
+    #     regularization = 0
+    # else:
+    #     train_sizes = [h1_train_size]
 
-        if only_train_h1:
-            h2_train_size = h1_train_size + delta_train_size
+    # for h1_train_size in train_sizes:
 
-        train_accuracies = pd.DataFrame()
-        test_accuracies = pd.DataFrame()
+    # if only_train_h1:
+    #     h2_train_len = h1_train_size + delta_train_size
 
-        for seed in seeds:
-            print('--------------------\n'
-                  'SETTING TRAIN SEED %d\n'
-                  '--------------------\n' % seed)
-            start_time = int(round(time.time() * 1000))
+    train_accuracies = pd.DataFrame()
+    test_accuracies = pd.DataFrame()
+    df_weights = pd.DataFrame(columns=['seed', 'model', 'diss_weight', 'col', 'weight'])
 
-            if not only_train_h1:
-                df_train_subset = df_train.sample(n=h2_train_size, random_state=seed)
-                # df_train_subset = df_train.sample(n=min(h2_train_size, len(df_train)), random_state=seed)
-                df_train_subsets_by_seed += [df_train_subset]
+    # train h1 and h2s by seed
+    for seed in seeds:
+        print('--------------------\n'
+              'SETTING TRAIN SEED %d\n'
+              '--------------------\n' % seed)
+        start_time = int(round(time.time() * 1000))
 
-                # tests_group[str(seed)] = df_train_subset
-                tests_group[str(seed)] = df_test.sample(n=test_size, random_state=seed)
-                # tests_group[str(seed)] = df_test.sample(n=min(test_size, len(df_test)), random_state=seed)
-                tests_group_user_ids += [str(seed)]
-            else:
-                df_train_subset = df_train.sample(n=h2_train_size, random_state=seed).reset_index(drop=True)
-                # df_train_subset = df_train.sample(n=min(h2_train_size, len(df_train)), random_state=seed).reset_index(drop=True)
-                # df_train_subset = df_train.sample(n=h2_train_size, random_state=0).reset_index(drop=True)
-                test_size = h2_train_size - h1_train_size
-                test_range = range(test_size)
-                # test_range = range(seed * test_size, (seed + 1) * test_size)
-                train_part = df_train_subset.drop(test_range)
-                test_part = df_train_subset.loc[test_range]
-                df_train_subset = train_part.append(test_part)
+        # if only_train_h1:
+        #     # df_train_subset = df_train.sample(n=h2_train_len, random_state=seed).reset_index(drop=True)
+        #     test_size = h2_train_len - h1_train_size
+        #     test_range = range(test_size)
+        #     train_part = df_train_subset.drop(test_range)
+        #     test_part = df_train_subset.loc[test_range]
+        #     df_train_subset = train_part.append(test_part)
+        #
+        # else:
+        #     df_train_subset = df_train.sample(n=h2_train_len, random_state=seed)
+        #     # df_train_subset = df_train.sample(n=min(h2_train_size, len(df_train)), random_state=seed)
+        #     df_train_subsets_by_seed += [df_train_subset]
+        #
+        #     # tests_group[str(seed)] = df_train_subset
+        #     tests_group[str(seed)] = df_test.sample(n=test_size, random_state=seed)
+        #     # tests_group[str(seed)] = df_test.sample(n=min(test_size, len(df_test)), random_state=seed)
+        #     tests_group_user_ids += [str(seed)]
 
-            X = df_train_subset.loc[:, df_train_subset.columns != target_col]
-            Y = df_train_subset[[target_col]]
+        h2_train = h2_train_by_seed[seed]
+        X = h2_train.drop(columns=[target_col])
+        Y = h2_train[[target_col]]
 
-            scaler = MinMaxScaler()
-            X = scaler.fit_transform(X, Y)
-            labelizer = LabelBinarizer()
-            Y = labelizer.fit_transform(Y)
+        scaler = MinMaxScaler()
+        X = scaler.fit_transform(X, Y)
+        labelizer = LabelBinarizer()
+        Y = labelizer.fit_transform(Y)
 
-            Xs_by_seed += [X]
-            Ys_by_seed += [Y]
+        Xs_by_seed += [X]
+        Ys_by_seed += [Y]
 
-            if not only_h2_weights:
-                h1 = Models.NeuralNetwork(X, Y, h1_train_size, h1_epochs, batch_size, layers, 0.02,
-                                   weights_seed=1, plot_train=True, regularization=regularization)
-                h1s_by_seed += [h1]
+        if not only_h2_weights:
+            h1 = Models.NeuralNetwork(X, Y, h1_train_size, h1_epochs, batch_size, layers, 0.02,
+                               weights_seed=1, plot_train=True, regularization=regularization)
+            h1_by_seed += [h1]
+
+            df_weights = df_weights.append(
+                get_df_weights(h1.final_weights[0], col_groups_dict, seed, 'h1', 0))
+
+            train_accuracies[seed] = h1.plot_train_accuracy
+            test_accuracies[seed] = h1.plot_test_accuracy
+        else:
+            h1 = Models.NeuralNetwork(X, Y, h1_train_size, 2, batch_size, layers, 0.02,
+                                      weights_seed=1, plot_train=True, regularization=regularization)
+        tf.reset_default_graph()
+        if not only_train_h1:
+            print("training h2s not using history...")
+            h2s_no_hist = []
+            # first_diss = True
+            first_diss_weight = True
+            for diss_weight in diss_weights:
+                print('dissonance weight ' + str(len(h2s_no_hist) + 1) + "/" + str(len(diss_weights)))
+
+                # if not first_diss and only_L1:
+                #     h2s_not_using_history += [h2s_not_using_history[0]]
+                #     continue
+
+                h2 = Models.NeuralNetwork(X, Y, h2_train_len, h2_epochs, batch_size, layers, 0.02,
+                                          diss_weight, h1, 'D', make_h1_subset=False,
+                                          test_model=False,
+                                          copy_h1_weights=copy_h1_weights, weights_seed=2,
+                                          normalize_diss_weight=normalize_diss_weight)
+                tf.reset_default_graph()
+                h2s_no_hist += [h2]
 
                 df_weights = df_weights.append(
-                    get_df_weights(h1.final_weights[0], col_groups_dict, seed, 'h1', 0))
+                    get_df_weights(h2.final_weights[0], col_groups_dict, seed, 'h2', diss_weight))
+                if only_h2_weights:
+                    break
 
-                train_accuracies[seed] = h1.plot_train_accuracy
-                test_accuracies[seed] = h1.plot_test_accuracy
-            else:
-                h1 = Models.NeuralNetwork(X, Y, h1_train_size, 2, batch_size, layers, 0.02,
-                                          weights_seed=1, plot_train=True, regularization=regularization)
-            tf.reset_default_graph()
-            if not only_train_h1:
-                print("training h2s not using history...")
-                h2s_not_using_history = []
-                # first_diss = True
-                first_diss_weight = True
-                for diss_weight in diss_weights:
-                    print('dissonance weight ' + str(len(h2s_not_using_history) + 1) + "/" + str(len(diss_weights)))
+            h2s_no_hist_by_seed += [h2s_no_hist]
 
-                    # if not first_diss and only_L1:
-                    #     h2s_not_using_history += [h2s_not_using_history[0]]
-                    #     continue
+        if make_plots and not only_h2_weights:
+            plot_x = list(range(h1_epochs))
+            plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
+            plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
+            plt.xlabel('epoch')
+            plt.ylabel('accuracy')
+            plt.legend()
+            plt.grid()
+            if only_train_h1:
+                plt.ylim(bottom, top)
+            runtime = int((round(time.time() * 1000)) - start_time) / 60000
+            plt.title('seed=' + str(seed) +' train=' + str(h1_train_size) + ' test=' + str(h2_train_len - h1_train_size) +
+                      ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
+                      + ' reg=' + str(regularization))
+            plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
+            if show_plots:
+                plt.show()
 
-                    h2 = Models.NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02,
-                                              diss_weight, h1, 'D', make_h1_subset=False,
-                                              test_model=False,
-                                              copy_h1_weights=copy_h1_weights, weights_seed=2,
-                                              normalize_diss_weight=normalize_diss_weight)
-                    tf.reset_default_graph()
-                    h2s_not_using_history += [h2]
+                # if only_train_h1:
+                #     h1_weights = get_df_weights(h1.final_weights[0], col_groups_dict, seed)
+                #     plt.bar(h1_weights['col'], h1_weights['weight'])
+                #     plt.grid(axis='y')
+                #     plt.xticks(rotation=30)
+                #     plt.show()
 
-                    df_weights = df_weights.append(
-                        get_df_weights(h2.final_weights[0], col_groups_dict, seed, 'h2', diss_weight))
-                    if only_h2_weights:
-                        break
-
-                h2s_not_using_history_by_seed += [h2s_not_using_history]
-
-            if make_plots and not only_h2_weights:
-                plot_x = list(range(h1_epochs))
-                plt.plot(plot_x, train_accuracies.mean(axis=1), label='train accuracy')
-                plt.plot(plot_x, test_accuracies.mean(axis=1), label='test accuracy')
-                plt.xlabel('epoch')
-                plt.ylabel('accuracy')
-                plt.legend()
-                plt.grid()
-                if only_train_h1:
-                    plt.ylim(bottom, top)
-                runtime = int((round(time.time() * 1000)) - start_time) / 60000
-                plt.title('seed='+str(seed)+' train=' + str(h1_train_size) + ' test=' + str(h2_train_size - h1_train_size) +
-                          ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
-                          + ' reg=' + str(regularization))
-                plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
-                if show_plots:
-                    plt.show()
-
-                    # if only_train_h1:
-                    #     h1_weights = get_df_weights(h1.final_weights[0], col_groups_dict, seed)
-                    #     plt.bar(h1_weights['col'], h1_weights['weight'])
-                    #     plt.grid(axis='y')
-                    #     plt.xticks(rotation=30)
-                    #     plt.show()
-                plt.clf()
-
+            plt.clf()
 
     df_weights.to_csv('%s\\weights\\no_personalization_weights.csv' % plots_dir, index=False)
-
-    if only_train_h1:
-        exit()
-
-    if only_h2_weights:
+    if only_train_h1 or only_h2_weights:
         continue
 
-    del df_train
-    del df_test
+    # del df_train
+    # del df_test
 
-    user_group_names.insert(0, 'test')
-    user_groups_test.insert(0, tests_group)
+    # user_group_names.insert(0, 'test')
+    # user_groups_test.insert(0, tests_group)
 
-    students_group_user_ids = list(students_group.groups.keys())
-    user_groups_user_ids = [tests_group_user_ids, students_group_user_ids]
-    user_group_idx = -1
+    # students_group_user_ids = list(students_group.groups.keys())
+    # user_groups_user_ids = [tests_group_user_ids, students_group_user_ids]
+    # user_group_idx = -1
 
-    for user_group_test in user_groups_test:
-        user_group_idx += 1
-        user_group_name = user_group_names[user_group_idx]
-        user_ids = user_groups_user_ids[user_group_idx]
+    # for user_group_test in user_groups_test:
+    # user_group_idx += 1
+    # user_group_name = user_group_names[user_group_idx]
+    # user_ids = user_groups_user_ids[user_group_idx]
 
-        total_users = 0
-        user_ids_in_range = []
+    # total_users = 0
+    # user_ids_in_range = []
+    #
+    # user_test_sets = {}
+    # user_train_sets = {}
 
-        user_test_sets = {}
-        user_train_sets = {}
+    # if user_group_name == 'test':
+    #     for seed in seeds:
+    #         total_users += 1
+    #         user_ids_in_range += [str(seed)]
+    #         user_test_sets[str(seed)] = user_group_test[str(seed)]
+    # else:
+    #     for user_id in user_ids:
+    #         try:
+    #             user_test_set = user_group_test.get_group(user_id)
+    #             user_train_set = user_groups_train[user_group_idx - 1].get_group(user_id)
+    #         except KeyError:
+    #             continue
+    #
+    #         if balance_histories:
+    #             target_groups = user_test_set.groupby(target_col)
+    #             if len(target_groups.size()) == 1:
+    #                 continue
+    #             user_test_set = target_groups.apply(lambda x: x.sample(target_groups.size().min(), random_state=1))
+    #
+    #             target_groups = user_train_set.groupby(target_col)
+    #             if len(target_groups.size()) == 1:
+    #                 continue
+    #             user_train_set = target_groups.apply(lambda x: x.sample(target_groups.size().min(), random_state=1))
+    #
+    #         history_len = len(user_test_set) + len(user_train_set)
+    #         if min_hist_len <= history_len <= max_hist_len and user_id not in skip_users:
+    #             if len(only_users) > 0 and user_id in only_users:
+    #                 total_users += 1
+    #                 user_ids_in_range += [user_id]
+    #                 user_test_sets[user_id] = user_test_set
+    #                 user_train_sets[user_id] = user_train_set
 
-        if user_group_name == 'test':
-            for seed in seeds:
-                total_users += 1
-                user_ids_in_range += [str(seed)]
-                user_test_sets[str(seed)] = user_group_test[str(seed)]
-        else:
-            for user_id in user_ids:
-                try:
-                    user_test_set = user_group_test.get_group(user_id)
-                    user_train_set = user_groups_train[user_group_idx - 1].get_group(user_id)
-                except KeyError:
-                    continue
+    # test all models on all users for all seeds
+    for user_idx in range(len(user_ids)):
+        user_id = user_ids[user_idx]
+        if user_idx + 1 <= current_user_count:
+            continue
+        for seed_idx in range(len(seeds)):
+            seed = seeds[seed_idx]
 
-                if balance_histories:
-                    target_group = user_test_set.groupby(target_col)
-                    if len(target_group.size()) == 1:
-                        continue
-                    user_test_set = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
+            # load seed
+            hist_train = hist_trains_by_seed[seed][user_id]
+            hist_test = hist_tests_by_seed[seed][user_id]
+            history_len = len(hist_test) + len(hist_train)
+            X = Xs_by_seed[seed_idx]
+            Y = Ys_by_seed[seed_idx]
+            h1 = h1_by_seed[seed_idx]
+            h2s_no_hist = h2s_no_hist_by_seed[seed_idx]
 
-                    target_group = user_train_set.groupby(target_col)
-                    if len(target_group.size()) == 1:
-                        continue
-                    user_train_set = target_group.apply(lambda x: x.sample(target_group.size().min(), random_state=1))
+            # user_test_set = user_test_sets[user_id]
+            # if not user_group_name == 'test' and user_count == max_user_count:
+            # if not user_group_name == 'test' and user_count == max_user_count:
+            #     break
 
-                history_len = len(user_test_set) + len(user_train_set)
-                if min_history_size <= history_len <= max_history_size and user_id not in skip_users:
-                    if len(only_users) > 0 and user_id in only_users:
-                        total_users += 1
-                        user_ids_in_range += [user_id]
-                        user_test_sets[user_id] = user_test_set
-                        user_train_sets[user_id] = user_train_set
+            # user_count += 1
 
-        user_count = 0
-        # for user_id, user_test_set in user_group_test:
-        for user_id in user_ids_in_range:
-            user_test_set = user_test_sets[user_id]
-            if not user_group_name == 'test' and user_count == user_max_count:
-                break
+            # prepare hist
+            hist_train_x = scaler.transform(hist_train.loc[:, hist_train.columns != target_col])
+            hist_train_y = labelizer.transform(hist_train[[target_col]])
+            hist_test_x = scaler.transform(hist_test.loc[:, hist_test.columns != target_col])
+            hist_test_y = labelizer.transform(hist_test[[target_col]])
+            hist = Models.History(hist_train_x, hist_train_y, width_factor=0.01)
 
-            user_count += 1
-            if user_count <= current_user_count:
-                continue
+            # else:
+            #     history_len = len(user_test_set)
+            # for seed_idx in range(len(seeds)):
+            # seed = seeds[seed_idx]
+            # if user_group_name == 'test' and seed_idx != user_idx-1:
+            #     continue
 
-            history_test_x = scaler.transform(user_test_set.loc[:, user_test_set.columns != target_col])
-            history_test_y = labelizer.transform(user_test_set[[target_col]])
+            print(str(user_idx) + '/' + str(len(user_ids)) + ' ' + user_col + ' ' + str(user_id) +
+                  ', instances: ' + str(history_len) + ', seed=' + str(seed) +'\n')
 
-            if user_group_name != 'test':
-                user_train_set = user_train_sets[user_id]
-                history_len = len(user_test_set) + len(user_train_set)
+            confusion_dir = plots_dir + '\\confusion_matrixes\\'+user_col+'_'+str(user_id)+'\\seed_'+str(seed)
+            if plot_confusion:
+                if not os.path.exists(confusion_dir):
+                    os.makedirs(confusion_dir)
 
-                history_train_x = scaler.transform(user_train_set.loc[:, user_train_set.columns != target_col])
-                history_train_y = labelizer.transform(user_train_set[[target_col]])
+            # test h1 on user
+            result = h1.test(hist_test_x, hist_test_y)
+            h1_acc = result['auc']
+            if plot_confusion:
+                title = user_col +'=' + str(user_id) +' h1 y='+'%.2f' % (h1_acc)
+                path = confusion_dir + '\\h1_seed_'+str(seed)+'.png'
+                plot_confusion_matrix(result['predicted'], hist_test_y, title, path)
 
-                history = Models.History(history_train_x, history_train_y, width_factor=0.01)
+            # test all models
+            if 'L0' in model_names:
+                print('setting likelihoods...')
+                hist.set_simple_likelihood(X, magnitude_multiplier=1)
+                # history.set_simple_likelihood(X, h2s_not_using_history[0].W1, magnitude_multiplier=2)
+            if {'L1', 'L2'}.intersection(set(model_names)):
+                print('setting kernels...')
+                hist.set_kernels(X, magnitude_multiplier=10)
 
-            else:
-                history_len = len(user_test_set)
+            models_x = []
+            models_y = []
 
             df_weights = pd.DataFrame(columns=['seed', 'model', 'diss_weight', 'col', 'weight'])
 
-            for seed_idx in range(len(seeds)):
-                seed = seeds[seed_idx]
-                if user_group_name == 'test' and seed_idx != user_count-1:
-                    continue
-                print(str(user_count) + '/' + str(total_users) + ' ' + user_group_name + ' ' + str(user_id) +
-                      ', instances: ' + str(history_len) + ', seed='+str(seed)+'\n')
+            for i in range(len(model_names)):
+                model_name = model_names[i]
+                print('model ' + str(i + 1) + "/" + str(len(model_names))+': '+model_name+'\n')
+                model_x = []
+                model_y = []
+                models_x += [model_x]
+                models_y += [model_y]
+                weights = diss_weights
 
-                confusion_dir = plots_dir + '\\confusion_matrixes\\'+user_group_name+'_'+str(user_id)+'\\seed_'+str(seed)
-                if plot_confusion:
-                    if not os.path.exists(confusion_dir):
-                        os.makedirs(confusion_dir)
+                if 'hybrid' in model_name:
+                    weights = hybrid_stds
+                    h2 = h2s_no_hist[0]
+                    if model_name == 'hybrid':
+                        h2.set_hybrid_test(hist, hist_test_x, hybrid_method, layers)
+                    elif model_name == 'full_hybrid':
+                        h2_train_set = Models.History(X, Y)
+                        h2.set_hybrid_test(h2_train_set, hist_test_x, hybrid_method, layers)
+                    df_weights = df_weights.append(
+                        get_df_weights(h2.hybrid_feature_weights, col_groups_dict, seed, model_name, 0))
 
-                X = Xs_by_seed[seed_idx]
-                Y = Ys_by_seed[seed_idx]
-                h1 = h1s_by_seed[seed_idx]
-                h2s_not_using_history = h2s_not_using_history_by_seed[seed_idx]
+                for j in range(len(weights)):
+                    if model_name == 'no hist':
+                        result = h2s_no_hist[j].test(hist_test_x, hist_test_y, h1)
+                    else:
+                        weight = weights[j]
+                        if 'hybrid' in model_name:
+                            result = h2s_no_hist[0].hybrid_test(hist_test_y, weight)
+                        else:
+                            print('weight ' + str(j + 1) + "/" + str(len(weights)))
+                            h2 = Models.NeuralNetwork(X, Y, h2_train_len, h2_epochs, batch_size, layers, 0.02, weight, h1, 'D',
+                                                      history=hist, use_history=True, model_type=model_name, test_model=False,
+                                                      copy_h1_weights=copy_h1_weights, weights_seed=2,
+                                                      normalize_diss_weight=normalize_diss_weight)
+                            tf.reset_default_graph()
+                            result = h2.test(hist_test_x, hist_test_y, h1)
 
-                # test h1 on user
-                result = h1.test(history_test_x, history_test_y)
-                h1_acc = result['auc']
+                            df_weights = df_weights.append(
+                                get_df_weights(h2.final_weights[0], col_groups_dict, seed, model_name, weight))
 
-                if plot_confusion:
-                    title = user_group_name +'=' + str(user_id) +' h1 y='+'%.2f' % (h1_acc)
-                    path = confusion_dir + '\\h1_seed_'+str(seed)+'.png'
-                    plot_confusion_matrix(result['predicted'], history_test_y, title, path)
+                    model_x += [result['compatibility']]
+                    model_y += [result['auc']]
 
-                if user_group_name != 'test':
+                    if plot_confusion:
+                        title = user_col + '=' + str(user_id) + ' model='+model_name \
+                                +' x='+'%.2f' % (result['compatibility']) +' y='+'%.2f' % (result['auc'])
+                        path = confusion_dir + '\\'+model_name+'_seed_'+str(seed)+'_' + str(j) + '.png'
+                        plot_confusion_matrix(result['predicted'], hist_test_y, title, path)
 
-                    if 'L0' in model_names:
-                        print('setting likelihoods...')
-                        history.set_simple_likelihood(X, magnitude_multiplier=1)
-                        # history.set_simple_likelihood(X, h2s_not_using_history[0].W1, magnitude_multiplier=2)
-                    if {'L1', 'L2'}.intersection(set(model_names)):
-                        print('setting kernels...')
-                        history.set_kernels(X, magnitude_multiplier=10)
+                df_weights.to_csv('%s\\weights\\%s_weights.csv' % (plots_dir, str(user_id)), index=False)
 
-                    models_x = []
-                    models_y = []
+                min_x = min(min(i) for i in models_x)
+                min_y = min(min(i) for i in models_y)
+                max_x = max(max(i) for i in models_x)
+                max_y = max(max(i) for i in models_y)
+
+                com_range = max_x - min_x
+                auc_range = max_y - min_y
+
+                if compute_area:
+                    mono_xs = [i.copy() for i in models_x]
+                    mono_ys = [i.copy() for i in models_y]
+
+                    for i in range(len(mono_xs)):
+                        make_monotonic(mono_xs[i], mono_ys[i])
+
+                    h1_area = (1-min_x)*h1_acc
+
+                    areas = [auc([min_x] + mono_xs[i] + [1], [mono_ys[i][0]] + mono_ys[i] + [h1_acc]) - h1_area
+                             for i in range(len(mono_xs))]
+
+                if make_plots:
+
+                    h1_x = [min_x, max_x]
+                    h1_y = [h1_acc, h1_acc]
+                    plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+
+                    markersize_delta = 2
+                    linewidth_delta = 1
+
+                    markersize = 8+markersize_delta*(len(model_names)-1)
+                    linewidth = 2+linewidth_delta*(len(model_names)-1)
 
                     for i in range(len(model_names)):
                         model_name = model_names[i]
-                        print('model ' + str(i + 1) + "/" + str(len(model_names))+': '+model_name+'\n')
-                        model_x = []
-                        model_y = []
-                        models_x += [model_x]
-                        models_y += [model_y]
-                        weights = diss_weights
+                        plt.plot(models_x[i], models_y[i], colors[model_name], marker='.', label=model_name,
+                                 markersize=markersize, linewidth=linewidth)
+                        markersize -= markersize_delta
+                        linewidth -= linewidth_delta
 
-                        if 'hybrid' in model_name:
-                            weights = hybrid_stds
-                            h2 = h2s_not_using_history[0]
-                            if model_name == 'hybrid':
-                                h2.set_hybrid_test(history, history_test_x, hybrid_method, layers)
-                            elif model_name == 'full_hybrid':
-                                h2_train_set = Models.History(X, Y)
-                                h2.set_hybrid_test(h2_train_set, history_test_x, hybrid_method, layers)
-                            df_weights = df_weights.append(
-                                get_df_weights(h2.hybrid_feature_weights, col_groups_dict, seed, model_name, 0))
-
-                        for j in range(len(weights)):
-                            if model_name == 'no hist':
-                                result = h2s_not_using_history[j].test(history_test_x, history_test_y, h1)
-                            else:
-                                weight = weights[j]
-                                if 'hybrid' in model_name:
-                                    result = h2s_not_using_history[0].hybrid_test(history_test_y, weight)
-                                else:
-                                    print('weight ' + str(j + 1) + "/" + str(len(weights)))
-                                    h2 = Models.NeuralNetwork(X, Y, h2_train_size, h2_epochs, batch_size, layers, 0.02, weight, h1, 'D',
-                                                              history=history, use_history=True, model_type=model_name, test_model=False,
-                                                              copy_h1_weights=copy_h1_weights, weights_seed=2,
-                                                              normalize_diss_weight=normalize_diss_weight)
-                                    tf.reset_default_graph()
-                                    result = h2.test(history_test_x, history_test_y, h1)
-
-                                    df_weights = df_weights.append(
-                                        get_df_weights(h2.final_weights[0], col_groups_dict, seed, model_name, weight))
-
-                            model_x += [result['compatibility']]
-                            model_y += [result['auc']]
-
-                            if plot_confusion:
-                                title = user_group_name + '=' + str(user_id) + ' model='+model_name \
-                                        +' x='+'%.2f' % (result['compatibility']) +' y='+'%.2f' % (result['auc'])
-                                path = confusion_dir + '\\'+model_name+'_seed_'+str(seed)+'_' + str(j) + '.png'
-                                plot_confusion_matrix(result['predicted'], history_test_y, title, path)
-
-                    df_weights.to_csv('%s\\weights\\%s_weights.csv' % (plots_dir, str(user_id)), index=False)
-
-                    min_x = min(min(i) for i in models_x)
-                    min_y = min(min(i) for i in models_y)
-                    max_x = max(max(i) for i in models_x)
-                    max_y = max(max(i) for i in models_y)
-
-                    com_range = max_x - min_x
-                    auc_range = max_y - min_y
-
-                    if compute_area:
-                        mono_xs = [i.copy() for i in models_x]
-                        mono_ys = [i.copy() for i in models_y]
-
-                        for i in range(len(mono_xs)):
-                            make_monotonic(mono_xs[i], mono_ys[i])
-
-                        h1_area = (1-min_x)*h1_acc
-                        
-                        areas = [auc([min_x] + mono_xs[i] + [1], [mono_ys[i][0]] + mono_ys[i] + [h1_acc]) - h1_area
-                                 for i in range(len(mono_xs))]
-
-                    if make_plots:
-
-                        h1_x = [min_x, max_x]
-                        h1_y = [h1_acc, h1_acc]
-                        plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
-
-                        markersize_delta = 2
-                        linewidth_delta = 1
-
-                        markersize = 8+markersize_delta*(len(model_names)-1)
-                        linewidth = 2+linewidth_delta*(len(model_names)-1)
-
-                        for i in range(len(model_names)):
-                            model_name = model_names[i]
-                            plt.plot(models_x[i], models_y[i], colors[model_name], marker='.', label=model_name,
-                                     markersize=markersize, linewidth=linewidth)
-                            markersize -= markersize_delta
-                            linewidth -= linewidth_delta
-
-                        plt.xlabel('compatibility')
-                        plt.ylabel('accuracy')
-                        plt.grid()
-                        plt.legend()
-                        title = 'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' \
-                                + str(history_train_fraction) + ' seed=' + str(seed)
-                        plt.title(title)
-                        plt.savefig(plots_dir+'\\by_user_id\\'+user_group_name+'_'+str(user_id)+'_seed_'+str(seed)+'.png')
-
-                        if plot_confusion:
-                            plt.savefig(confusion_dir + '\\plot.png')
-                        if show_plots:
-                            plt.show()
-
-                    # # write log
-                    # if 'hybrid' in model_names:
-                    #     hybrid_idx = model_names.index('hybrid')
-                    # else:
-                    #     hybrid_idx = -1
-
-                    with open(plots_dir + '\\log.csv', 'a', newline='') as file_out:
-                        writer = csv.writer(file_out)
-                        for i in range(len(diss_weights)):
-                            row = [str(history_train_fraction), str(user_id), str(history_len), str(seed),
-                                   str(com_range), str(auc_range), str(h1_acc), str(diss_weights[i])]
-                            for j in range(len(model_names)):
-                                model_name = model_names[j]
-                                if 'hybrid' not in model_name:
-                                    row += [models_x[j][i]]
-                                    row += [models_y[j][i]]
-                            writer.writerow(row)
-
-                    with open(plots_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
-                        writer = csv.writer(file_out)
-                        for i in range(len(hybrid_stds)):
-                            row = [str(history_train_fraction), str(user_id), str(history_len), str(seed),
-                                   str(hybrid_stds[i])]
-                            for j in range(len(model_names)):
-                                model_name = model_names[j]
-                                if 'hybrid' in model_name:
-                                    row += [models_x[j][i]]
-                                    row += [models_y[j][i]]
-                            writer.writerow(row)
-
-                else:  # on test
-                    h2_x = []
-                    h2_y = []
-                    for i in range(len(h2s_not_using_history)):
-                        result = h2s_not_using_history[i].test(history_test_x, history_test_y, h1)
-                        h2_x += [result['compatibility']]
-                        h2_y += [result['auc']]
-
-                        if plot_confusion:
-                            title = user_group_name + '=' + str(user_id) + \
-                                    ' h2=no_hist x='+'%.2f' % (result['compatibility']) +' y='+'%.2f' % (result['auc'])
-                            path = confusion_dir + '\\test_seed_'+str(seed)+'_'+str(i)+'.png'
-                            plot_confusion_matrix(result['predicted'], history_test_y, title, path)
-
-                    h1_x = [min(h2_x), max(h2_x)]
-                    h1_y = [h1_acc, h1_acc]
-                    plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
-                    plt.plot(h2_x, h2_y, 'b', marker='.', label='h2')
                     plt.xlabel('compatibility')
                     plt.ylabel('accuracy')
+                    plt.grid()
                     plt.legend()
-                    # plt.legend(loc='lower left')
-                    plt.title('test seed=' + str(user_id) + ' h1=' + str(h1_train_size) + ' h2=' + str(
-                        h2_train_size)+' len='+str(history_len))
+                    title = 'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' \
+                            + str(train_frac) + ' seed=' + str(seed)
+                    plt.title(title)
+                    plt.savefig(plots_dir+'\\by_user_id\\'+user_col+'_'+str(user_id)+'_seed_'+str(seed)+'.png')
 
-                    plt.savefig(plots_dir+'\\model_training\\test_for_seed_' + str(user_id) + '.png')
                     if plot_confusion:
-                        plt.savefig(confusion_dir+'\\plot.png')
-                    plt.show()
+                        plt.savefig(confusion_dir + '\\plot.png')
+                    if show_plots:
+                        plt.show()
+
+                # # write log
+                # if 'hybrid' in model_names:
+                #     hybrid_idx = model_names.index('hybrid')
+                # else:
+                #     hybrid_idx = -1
+
+                with open(plots_dir + '\\log.csv', 'a', newline='') as file_out:
+                    writer = csv.writer(file_out)
+                    for i in range(len(diss_weights)):
+                        row = [str(train_frac), str(user_id), str(history_len), str(seed),
+                               str(com_range), str(auc_range), str(h1_acc), str(diss_weights[i])]
+                        for j in range(len(model_names)):
+                            model_name = model_names[j]
+                            if 'hybrid' not in model_name:
+                                row += [models_x[j][i]]
+                                row += [models_y[j][i]]
+                        writer.writerow(row)
+
+                with open(plots_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
+                    writer = csv.writer(file_out)
+                    for i in range(len(hybrid_stds)):
+                        row = [str(train_frac), str(user_id), str(history_len), str(seed),
+                               str(hybrid_stds[i])]
+                        for j in range(len(model_names)):
+                            model_name = model_names[j]
+                            if 'hybrid' in model_name:
+                                row += [models_x[j][i]]
+                                row += [models_y[j][i]]
+                        writer.writerow(row)
+
+                # else:  # on test
+                #     h2_x = []
+                #     h2_y = []
+                #     for i in range(len(h2s_not_using_history)):
+                #         result = h2s_not_using_history[i].test(history_test_x, history_test_y, h1)
+                #         h2_x += [result['compatibility']]
+                #         h2_y += [result['auc']]
+                #
+                #         if plot_confusion:
+                #             title = user_group_name + '=' + str(user_id) + \
+                #                     ' h2=no_hist x='+'%.2f' % (result['compatibility']) +' y='+'%.2f' % (result['auc'])
+                #             path = confusion_dir + '\\test_seed_'+str(seed)+'_'+str(i)+'.png'
+                #             plot_confusion_matrix(result['predicted'], history_test_y, title, path)
+                #
+                #     h1_x = [min(h2_x), max(h2_x)]
+                #     h1_y = [h1_acc, h1_acc]
+                #     plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+                #     plt.plot(h2_x, h2_y, 'b', marker='.', label='h2')
+                #     plt.xlabel('compatibility')
+                #     plt.ylabel('accuracy')
+                #     plt.legend()
+                #     # plt.legend(loc='lower left')
+                #     plt.title('test seed=' + str(user_id) + ' h1=' + str(h1_train_size) + ' h2=' + str(
+                #         h2_train_len) + ' len=' + str(history_len))
+                #
+                #     plt.savefig(plots_dir+'\\model_training\\test_for_seed_' + str(user_id) + '.png')
+                #     if plot_confusion:
+                #         plt.savefig(confusion_dir+'\\plot.png')
+                #     plt.show()
+
                 plt.clf()
