@@ -134,7 +134,7 @@ def get_df_weights(weights, col_groups_dict, seed, model, diss_weight):
 # # skip_cols = ['Animation', 'Comedy', 'Family', 'Adventure', 'Fantasy', 'Romance', 'Drama', 'Action', 'Crime', 'Thriller',
 # #              'Horror', 'History', 'Science Fiction', 'Mystery', 'War', 'Foreign', 'Music', 'Documentary', 'Western', 'TV Movie']
 
-dataset = "salaries"
+dataset_name = "salaries"
 target_col = 'salary'
 original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
                        'native-country']
@@ -142,7 +142,8 @@ original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation',
 skip_cols = ['fnlgwt']
 user_cols = ['relationship']
 skip_users = []
-only_these_users = ['Wife']
+only_these_users = []
+# only_these_users = ['Wife']
 df_max_size = -1
 layers = []
 train_frac = 0.8
@@ -274,7 +275,7 @@ models_to_test = [
 
 # user settings
 min_hist_len = 0
-max_hist_len = 100000
+max_hist_len = 2000
 current_user_count = 0
 max_user_count = 15
 
@@ -321,28 +322,30 @@ for categ in original_categ_cols:
 user_cols = user_cols_not_skipped
 original_categ_cols = original_categs_not_skipped
 
-full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' % (dataset, dataset)
-results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s" % dataset
+dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv'\
+               % (dataset_name, dataset_name)
+# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s"\
+#                % dataset_name
 
 # run whole experiment for each user column selection
 for user_col in user_cols:
     categ_cols = original_categ_cols.copy()
-    # try:
-    #     categ_cols.remove(user_col)
-    # except ValueError:
-    #     pass
+    try:  # dont one hot encode the user_col
+        categ_cols.remove(user_col)
+    except ValueError:
+        pass
 
-    plots_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\plots\\' + user_col
-    if os.path.exists(plots_dir):
-        shutil.rmtree(plots_dir)
+    result_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\result\\' + user_col
+    if os.path.exists(result_dir):
+        shutil.rmtree(result_dir)
     else:
-        os.makedirs(plots_dir)
-    os.makedirs(plots_dir + '\\by_user_id')
-    os.makedirs(plots_dir + '\\model_training')
-    os.makedirs(plots_dir + '\\weights')
+        os.makedirs(result_dir)
+    os.makedirs(result_dir + '\\by_user_id')
+    os.makedirs(result_dir + '\\model_training')
+    os.makedirs(result_dir + '\\weights')
 
-    with open(plots_dir + '\\log.csv', 'w', newline='') as log_file:
-        with open(plots_dir + '\\hybrid_log.csv', 'w', newline='') as hybrid_log_file:
+    with open(result_dir + '\\log.csv', 'w', newline='') as log_file:
+        with open(result_dir + '\\hybrid_log.csv', 'w', newline='') as hybrid_log_file:
             log_writer = csv.writer(log_file)
             hybrid_log_writer = csv.writer(hybrid_log_file)
             log_header = ['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc',
@@ -357,7 +360,7 @@ for user_col in user_cols:
             hybrid_log_writer.writerow(hybrid_log_header)
 
     print('loading data...')
-    dataset_full = pd.read_csv(full_dataset_path)
+    dataset_full = pd.read_csv(dataset_path)
     if df_max_size >= 0:
         dataset_full = dataset_full[:df_max_size]
 
@@ -381,7 +384,7 @@ for user_col in user_cols:
     print('pre-processing data... ')
     ohe = ce.OneHotEncoder(cols=categ_cols, use_cat_names=True)
     dataset_full = ohe.fit_transform(dataset_full)
-    print('num features = %d' % dataset_full.shape[1] - 2)  # minus user and target cols
+    print('num features = %d' % (dataset_full.shape[1] - 2))  # minus user and target cols
 
     print('splitting histories into train and test sets...')
     groups_by_user = dataset_full.groupby(user_col)
@@ -423,23 +426,28 @@ for user_col in user_cols:
                 hist.index = hist.index.droplevel(0)
 
             # attempt to add user hist
-            if min_hist_len <= len(hist) <= max_hist_len and train_frac * (total_len + len(hist)) <= h2_train_len:
-                user_ids.add(user_id)
-
-                # split hist into train and test sets
+            hist_len = len(hist)
+            if hist_len > max_hist_len:
+                # hist is too long: still add user but shorten hist
+                hist = hist.sample(n=max_hist_len, random_state=seed)
+                hist_len = max_hist_len
+            if min_hist_len <= hist_len and train_frac * (total_len + hist_len) <= h2_train_len:
                 if chrono_split:
-                    hist_train = hist[:int(len(hist) * train_frac) + 1]
+                    hist_train = hist[:int(hist_len * train_frac) + 1]
                 else:
-                    hist_train = hist.sample(n=int(len(hist) * train_frac) + 1, random_state=seed)
+                    hist_train = hist.sample(n=int(hist_len * train_frac) + 1, random_state=seed)
                 hist_test = hist.drop(hist_train.index)
 
                 # add user hist
+                user_ids.add(user_id)
                 hist_trains[user_id] = hist_train.reset_index(drop=True)
                 hist_tests[user_id] = hist_test.reset_index(drop=True)
+                total_len += hist_len
                 h2_train = h2_train.append(hist_train)
-                total_len += len(hist)
+
                 if train_frac * (total_len + min_hist_len) > h2_train_len:  # cannot add more users
                     break
+
         hist_trains_by_seed += [hist_trains]
         hist_tests_by_seed += [hist_tests]
         h2_train_by_seed += [h2_train.reset_index(drop=True)]
@@ -527,12 +535,12 @@ for user_col in user_cols:
                 'seed=' + str(seed) + ' train=' + str(h1_train_size) + ' test=' + str(h2_train_len - h1_train_size) +
                 ' epochs=' + str(h1_epochs) + ' run=%.2f min' % runtime + '\nlayers=' + str(layers)
                 + ' reg=' + str(regularization))
-            plt.savefig(plots_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
+            plt.savefig(result_dir + '\\model_training\\' + 'h1_train_seed_' + str(seed))
             if show_plots:
                 plt.show()
             plt.clf()
 
-    df_weights.to_csv('%s\\weights\\no_personalization_weights.csv' % plots_dir, index=False)
+    df_weights.to_csv('%s\\weights\\no_personalization_weights.csv' % result_dir, index=False)
     if only_train_h1 or only_h2_weights:
         continue
 
@@ -566,7 +574,7 @@ for user_col in user_cols:
             print(str(user_count) + '/' + str(len(user_ids)) + ' ' + user_col + ' ' + str(user_id) +
                   ', instances: ' + str(history_len) + ', seed=' + str(seed) + '\n')
 
-            confusion_dir = plots_dir + '\\confusion_matrixes\\' + user_col + '_' + str(user_id) + '\\seed_' + str(seed)
+            confusion_dir = result_dir + '\\confusion_matrixes\\' + user_col + '_' + str(user_id) + '\\seed_' + str(seed)
             if plot_confusion:
                 if not os.path.exists(confusion_dir):
                     os.makedirs(confusion_dir)
@@ -642,7 +650,7 @@ for user_col in user_cols:
                         path = confusion_dir + '\\' + model_name + '_seed_' + str(seed) + '_' + str(j) + '.png'
                         plot_confusion_matrix(result['predicted'], hist_test_y, title, path)
 
-            df_weights.to_csv('%s\\weights\\%s_weights.csv' % (plots_dir, str(user_id)), index=False)
+            df_weights.to_csv('%s\\weights\\%s_weights.csv' % (result_dir, str(user_id)), index=False)
 
             min_x = min(min(i) for i in models_x)
             min_y = min(min(i) for i in models_y)
@@ -691,7 +699,7 @@ for user_col in user_cols:
                         + str(train_frac) + ' seed=' + str(seed)
                 plt.title(title)
                 plt.savefig(
-                    plots_dir + '\\by_user_id\\' + user_col + '_' + str(user_id) + '_seed_' + str(seed) + '.png')
+                    result_dir + '\\by_user_id\\' + user_col + '_' + str(user_id) + '_seed_' + str(seed) + '.png')
 
                 if plot_confusion:
                     plt.savefig(confusion_dir + '\\plot.png')
@@ -700,7 +708,7 @@ for user_col in user_cols:
                 plt.clf()
 
             # write to logs
-            with open(plots_dir + '\\log.csv', 'a', newline='') as file_out:
+            with open(result_dir + '\\log.csv', 'a', newline='') as file_out:
                 writer = csv.writer(file_out)
                 for i in range(len(diss_weights)):
                     row = [str(train_frac), str(user_id), str(history_len), str(seed),
@@ -712,7 +720,7 @@ for user_col in user_cols:
                             row += [models_y[j][i]]
                     writer.writerow(row)
 
-            with open(plots_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
+            with open(result_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
                 writer = csv.writer(file_out)
                 for i in range(len(hybrid_stds)):
                     row = [str(train_frac), str(user_id), str(history_len), str(seed),

@@ -593,5 +593,4 @@ cross_analyze_features(dataset_path, result_path, categ_cols, user_cols, skip_co
                        logs_path, weights_path, df_size=df_size, boundaries=boundaries)
 
 # analyze_features(dataset_path, result_path, user_cols[0], categ_cols)
-
 # analyze_histories(dataset_path, result_path, user_cols[0])
