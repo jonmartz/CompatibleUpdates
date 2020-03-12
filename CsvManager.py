@@ -400,7 +400,7 @@ def merge_csv_parts(path, user_types):
         i = 1
         done = False
         while not done:
-            part = 'part %d' % i
+            part = '%d' % i
             i += 1
             try:
                 log_path = '%s %s\\%s\\log.csv' % (path, part, user_type)
@@ -421,6 +421,11 @@ def merge_csv_parts(path, user_types):
         df_log_merged.to_csv('%s\\log.csv' % (user_type_dir), index=False)
         df_hybrid_merged.to_csv('%s\\hybrid_log.csv' % (user_type_dir), index=False)
 
+
+merge_csv_parts(
+    'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\hist_cross_val\\salaries\\no hist-L3-hybrid-baseline',
+    ['relationship']
+)
 
 def create_age_class_col():
     path_in = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\titanic\\titanic.csv'

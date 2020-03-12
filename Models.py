@@ -19,21 +19,22 @@ from keras.regularizers import L1L2
 import seaborn as sn
 import math
 
+
 class NeuralNetwork:
     """
     Class implementing a Neural Network, capable of training using the log loss + dissonance
     to be able to produce compatible updates.
     """
-    def __init__(self, X, Y, train_fraction, train_epochs, batch_size, layers, learning_rate=0.02,
+    def __init__(self, X, Y, train_fraction, train_epochs, batch_size, layers, model_name, learning_rate=0.02,
                  diss_weight=None, old_model=None, dissonance_type=None, make_h1_subset=True, copy_h1_weights=True,
-                 history=None, use_history=False, initial_stdev=1, make_train_similar_to_history=False,
-                 model_type='L0', test_model=True, weights_seed=1, regularization=0.0, plot_train=False,
-                 normalize_diss_weight=False):
+                 history=None, use_history=False, initial_std=1, make_train_similar_to_history=False, test_model=True,
+                 weights_seed=1, regularization=0.0, plot_train=False, ensemble_lr=1.0):
 
+        self.model_name = model_name
         self.old_model = old_model
         self.dissonant_likelihood = None
 
-        start_time = int(round(time.time() * 1000))
+        # start_time = int(round(time.time() * 1000))
 
         # ------------------------------ #
         # PREPARE TRAINING AND TEST SETS #
@@ -61,12 +62,10 @@ class NeuralNetwork:
         if history is not None:
             try:
                 kernels_train = history.kernels[self.train_indexes]
-                kernels_test = history.kernels[self.test_indexes]
             except TypeError:
                 pass
             try:
                 likelihood_train = history.likelihood[self.train_indexes]
-                likelihood_test = history.likelihood[self.test_indexes]
             except TypeError:
                 pass
 
@@ -74,11 +73,12 @@ class NeuralNetwork:
         # CREATE MODEL #
         # ------------ #
 
-        n_features = len(X[0])
+        features_count = len(X_train[0])
+        train_len = len(X_train)
         labels_dim = 1
 
         # these placeholders serve as the input tensors
-        x = tf.placeholder(tf.float32, [None, n_features], name='input')
+        x = tf.placeholder(tf.float32, [None, features_count], name='input')
         y = tf.placeholder(tf.float32, [None, labels_dim], name='labels')
         likelihood = tf.placeholder(tf.float32, [None, labels_dim], name='likelihood')
 
@@ -93,22 +93,22 @@ class NeuralNetwork:
         if old_model is None or not copy_h1_weights:
             for i in range(len(layers)):
                 if i == 0:
-                    initial_weights += [tf.truncated_normal([n_features, layers[i]], mean=0,
-                                                            stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)]
+                    initial_weights += [tf.truncated_normal([features_count, layers[i]], mean=0,
+                                                            stddev=initial_std / np.sqrt(features_count), seed=weights_seed)]
                     initial_biases += [tf.truncated_normal([layers[i]], mean=0,
-                                                           stddev=initial_stdev / np.sqrt(n_features), seed=weights_seed)]
+                                                           stddev=initial_std / np.sqrt(features_count), seed=weights_seed)]
                 else:
-                    initial_weights += [tf.random_normal([layers[i-1], layers[i]], mean=0, stddev=initial_stdev,
+                    initial_weights += [tf.random_normal([layers[i-1], layers[i]], mean=0, stddev=initial_std,
                                                          seed=weights_seed)]
-                    initial_biases += [tf.random_normal([layers[i]], mean=0, stddev=initial_stdev, seed=weights_seed)]
+                    initial_biases += [tf.random_normal([layers[i]], mean=0, stddev=initial_std, seed=weights_seed)]
 
             if len(layers) == 0:
-                last_layer = n_features
+                last_layer = features_count
             else:
                 last_layer = layers[-1]
-            initial_weights += [tf.random_normal([last_layer, labels_dim], mean=0, stddev=initial_stdev,
+            initial_weights += [tf.random_normal([last_layer, labels_dim], mean=0, stddev=initial_std,
                                                  seed=weights_seed)]
-            initial_biases += [tf.random_normal([labels_dim], mean=0, stddev=initial_stdev, seed=weights_seed)]
+            initial_biases += [tf.random_normal([labels_dim], mean=0, stddev=initial_std, seed=weights_seed)]
         else:
             for i in range(len(layers)):
                 initial_weights += [tf.convert_to_tensor(old_model.final_weights[i])]
@@ -122,11 +122,10 @@ class NeuralNetwork:
             weights += [tf.Variable(initial_weights[i], name='weights_'+str(i+1))]
             biases += [tf.Variable(initial_biases[i], name='biases_'+str(i+1))]
             if i == 0:
-                activations += [tf.nn.relu((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
-                # activations += [tf.sigmoid((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
+                activations += [tf.sigmoid((tf.matmul(x, weights[i]) + biases[i]), name='activations_'+str(i+1))]
             else:
-                activations += [tf.nn.relu((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
-                # activations += [tf.sigmoid((tf.matmul(activations[i-1], weights[i]) + biases[i]), name='activations_' + str(i + 1))]
+                activations += [tf.sigmoid((tf.matmul(activations[i-1], weights[i]) + biases[i]),
+                                           name='activations_' + str(i + 1))]
 
         weights += [tf.Variable(initial_weights[-1], name='weights_' + str(len(layers) + 1))]
         biases += [tf.Variable(initial_biases[-1], name='biases_' + str(len(layers) + 1))]
@@ -138,120 +137,104 @@ class NeuralNetwork:
         output = tf.nn.sigmoid(logits, name='output')
 
         # for non parametric compatibility
-        if model_type in ['L1', 'L2', 'L3']:
+        if model_name in ['L1', 'L2', 'L3', 'baseline']:
             kernels = tf.placeholder(tf.float32, [None, len(history.instances)], name='kernels')
-            hist_x = tf.placeholder(tf.float32, [None, n_features], name='hist_input')
+            hist_x = tf.placeholder(tf.float32, [None, features_count], name='hist_input')
             hist_y = tf.placeholder(tf.float32, [None, labels_dim], name='hist_labels')
             hist_y_old_correct = tf.placeholder(tf.float32, [None, labels_dim], name='hist_old_corrects')
 
             hist_activations = []
             for i in range(len(layers)):
                 if i == 0:
-                    hist_activations += [tf.sigmoid((tf.matmul(hist_x, weights[i]) + biases[i]), name='hist_activations_'+str(i+1))]
+                    hist_activations += [tf.sigmoid((tf.matmul(hist_x, weights[i]) + biases[i]),
+                                                    name='hist_activations_'+str(i+1))]
                 else:
-                    hist_activations += [tf.sigmoid((tf.matmul(hist_activations[i-1], weights[i]) + biases[i]), name='hist_activations_'+str(i+1))]
+                    hist_activations += [tf.sigmoid((tf.matmul(hist_activations[i-1], weights[i]) + biases[i]),
+                                                    name='hist_activations_'+str(i+1))]
 
             if len(layers) == 0:
                 hist_logits = tf.matmul(hist_x, weights[-1]) + biases[-1]
             else:
                 hist_logits = tf.matmul(hist_activations[-1], weights[-1]) + biases[-1]
 
-        # model evaluation tensors
-        correct_prediction = tf.equal(tf.round(output), y)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="Accuracy")
-        y_new_correct = tf.cast(tf.equal(tf.round(output), y), tf.float32)
+        if plot_train:
+            # model evaluation tensors
+            correct_prediction = tf.equal(tf.round(output), y)
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="Accuracy")
 
         # loss computation
         log_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits)
-        # log_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits))
 
         # dissonance computation
-        if old_model is None:
+        if old_model is None:  # for training pre-update version
             loss = log_loss
-        else:
-            if dissonance_type == "D":
-                dissonance = y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits)
-            elif dissonance_type == "D'":
-                dissonance = tf.nn.sigmoid_cross_entropy_with_logits(labels=y_old_probabilities, logits=logits)
-            elif dissonance_type == "D''":
-                dissonance = y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(labels=y_old_probabilities,
-                                                                                     logits=logits)
-            else:
-                raise Exception("invalid dissonance type")
+
+        else:  # for training post-update version
+
+            Y_train_old_probabilities = old_model.predict_probabilities(X_train)
+            Y_train_old_labels = np.round(Y_train_old_probabilities)
+            Y_train_old_correct = np.equal(Y_train_old_labels, Y_train).astype(int)
 
             if history is None:
-                if normalize_diss_weight:
-                    loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance)
-                else:
-                    loss = log_loss + diss_weight * dissonance
-                    # loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
-                compatibility = tf.reduce_sum(y_old_correct * y_new_correct) / tf.reduce_sum(y_old_correct)
-            else:
-                if not use_history:
-                    if normalize_diss_weight:
-                        loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance)
-                    else:
-                        loss = log_loss + diss_weight * dissonance
-                        # loss = log_loss + diss_weight * tf.reduce_mean(dissonance)
-                else:
-                    if model_type == 'L2':
-                        # shape = tf.shape(kernels)
-                        kernel_likelihood = tf.reduce_sum(kernels, axis=1) / len(history.instances)
-                        if normalize_diss_weight:
-                            loss = (1 - diss_weight) * log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(
-                                dissonance)
-                        else:
-                            loss = log_loss + diss_weight * kernel_likelihood * dissonance
-                            # loss = log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(dissonance)
 
-                    elif model_type == 'L1' or model_type == 'L3':
-                        hist_dissonance = hist_y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(
-                            labels=hist_y,
-                            logits=hist_logits,
-                            name='hist_dissonance')
-                        hist_dissonance = tf.reshape(hist_dissonance, [-1])
-                        reduced_diss_weight = diss_weight / 1
+                if 'adaboost' in model_name:
+                    Y_train_old_incorrect = 1 - Y_train_old_correct
+                    # pred_error = np.mean(np.average(x_important, axis=0))
+                    pred_error = np.mean(Y_train_old_incorrect)
+                    old_ensemble_weight = ensemble_lr * np.log((1.0 - pred_error) / pred_error)
+                    old_model.ensemble_weight = old_ensemble_weight
 
-                        if model_type == 'L1':
-                            kernel_likelihood = tf.reduce_sum(kernels * hist_dissonance) / tf.reduce_sum(kernels)
-                            if normalize_diss_weight:
-                                loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(kernel_likelihood)
-                            else:
-                                loss = log_loss + reduced_diss_weight * kernel_likelihood
-                                # loss = log_loss + reduced_diss_weight * tf.reduce_mean(kernel_likelihood)
+                    if 'comp' in model_name:  # give larger weights to h1's correct predictions
+                        y_important = Y_train_old_correct
+                    else:  # give larger weights to h1's mistakes
+                        y_important = Y_train_old_incorrect
+                    loss_weights = (1.0/train_len) * np.exp(
+                        old_ensemble_weight * y_important * (old_ensemble_weight < 0))
 
-                        else:  # L3
-                            if normalize_diss_weight:
-                                loss = (1 - diss_weight) * log_loss + diss_weight * tf.reduce_mean(hist_dissonance)
-                            else:
-                                loss = log_loss + reduced_diss_weight * hist_dissonance
-                                # loss = log_loss + reduced_diss_weight * tf.reduce_mean(hist_dissonance)
+                else:  # Ece's method
+                    # to decrease the loss obtained from non-dissonant instances by 1-diss_weight
+                    loss_weights = (1 - diss_weight) * (1 - y_old_correct) + y_old_correct
 
-                    else:  # L0
-                        if normalize_diss_weight:
-                            loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
-                        else:
-                            loss = log_loss + diss_weight * dissonance * likelihood
-                            # loss = log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
+                loss = loss_weights * log_loss
 
-                if model_type in ['L1', 'L2']:
-                    compatibility = tf.reduce_sum(
-                        y_old_correct * y_new_correct * tf.reduce_sum(kernels, axis=1)) / tf.reduce_sum(
-                        y_old_correct * tf.reduce_sum(kernels, axis=1))
-                else:
-                    compatibility = tf.reduce_sum(y_old_correct * y_new_correct * likelihood) / tf.reduce_sum(
-                        y_old_correct * likelihood)
+            else:  # use history
 
-        # loss = tf.reduce_mean(loss)
+                dissonance = y_old_correct * tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits)
 
-        if regularization > 0:
+                if model_name == 'L0':
+                    loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(dissonance * likelihood)
+
+                elif model_name == 'L2':
+                    kernel_likelihood = tf.reduce_sum(kernels, axis=1) / len(history.instances)
+                    loss = (1 - diss_weight) * log_loss + diss_weight * kernel_likelihood * tf.reduce_mean(
+                        dissonance)
+
+                elif model_name in ['L1', 'L3', 'baseline']:
+                    hist_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+                        labels=hist_y,
+                        logits=hist_logits,
+                        name='hist_dissonance')
+                    hist_dissonance = tf.reshape(hist_y_old_correct * hist_loss, [-1])
+
+                    if model_name == 'baseline':  # considers hist but ignores dissonance
+                        loss = (1 - diss_weight) * log_loss + diss_weight * tf.reduce_mean(hist_loss)
+
+                    elif model_name == 'L1':
+                        kernel_likelihood = tf.reduce_sum(kernels * hist_dissonance) / tf.reduce_sum(kernels)
+                        loss = (1-diss_weight) * log_loss + diss_weight * tf.reduce_mean(kernel_likelihood)
+
+                    elif model_name == 'L3':
+                        loss = (1 - diss_weight) * log_loss + diss_weight * tf.reduce_mean(hist_dissonance)
+
+        if regularization == 0:
+            loss = tf.reduce_mean(loss)
+        else:
             regularizers = tf.nn.l2_loss(weights[0])
             for i in range(1, len(weights)):
                 regularizers += tf.nn.l2_loss(weights[i])
             loss = tf.reduce_mean(loss + regularization * regularizers)
 
         # prepare training
-        # train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss) (obsolete)
         train_step = tf.train.AdamOptimizer().minimize(loss)
         init_op = tf.global_variables_initializer()
 
@@ -274,11 +257,6 @@ class NeuralNetwork:
                 self.plot_test_accuracy = []
 
                 for epoch in range(train_epochs):
-                    # if epoch % 10 == 0:
-                    #     sys.stdout.write("epoch %d/%d\r" % (epoch+1, train_epochs))
-                    #     sys.stdout.flush()
-                    # losses = 0
-                    # accs = 0
                     for batch in range(batches + 1):
 
                         batch_start = batch * batch_size
@@ -291,7 +269,6 @@ class NeuralNetwork:
                         sess.run(train_step, feed_dict={x: X_batch, y: Y_batch})
 
                     if plot_train:
-                        # print(str(epoch + 1) + "/" + str(train_epochs) + "\tloss = %.4f" %losses +"\tauc = %.4f" % self.acc)
                         plot_x += [epoch]
 
                         acc, lss = sess.run([accuracy, loss], feed_dict={x: X_train, y: Y_train})
@@ -302,54 +279,43 @@ class NeuralNetwork:
                         self.plot_test_losses += [lss]
                         self.plot_test_accuracy += [acc]
 
-                # if plot_train:
-                #     # plt.plot(plot_x, plot_train_losses, 'b', label='loss')
-                #     plt.plot(plot_x, plot_train_accuracy, label='train accuracy')
-                #     plt.plot(plot_x, plot_test_accuracy, label='test accuracy')
-                #     plt.xlabel('epoch')
-                #     plt.ylabel('accuracy')
-                #     plt.legend()
-                #     plt.grid()
-                #     runtime = int((round(time.time() * 1000)) - start_time) / 60000
-                #     plt.title('seed='+str(seed)+' train='+str(len(Y_train))+' test='+str(len(Y_test))+
-                #               ' epochs='+str(train_epochs)+' run=%.2f min' % runtime+'\nlayers='+str(layers)
-                #               +' reg='+str(regularization))
-                #     plt.savefig(plots_dir + '\\model_training\\'+'h1_seed_'+str(seed))
-                #     plt.show()
-                #     plt.clf()
-
                 if test_model:
                     acc, lss, out = sess.run([accuracy, loss, output], feed_dict={x: X_test, y: Y_test})
                     # self.auc = sklearn.metrics.roc_auc_score(Y_test, out)
                     self.accuracy = acc
-
-
-                    print("test acc = %.4f" % self.accuracy)
+                    # print("h1 acc = %.4f" % self.accuracy)
 
             else:  # with compatibility
 
                 if history is not None:
                     if use_history:
-                        history_string = "MODEL " + model_type
+                        history_string = "MODEL " + model_name
                     else:
                         history_string = "IGNORE HISTORY"
+
+                    hist_Y_old_probabilities = old_model.predict_probabilities(history.instances)
+                    hist_Y_old_labels = tf.round(hist_Y_old_probabilities).eval()
+                    hist_Y_old_correct = tf.cast(tf.equal(hist_Y_old_labels, history.labels), tf.float32).eval()
+
+
                 else:
                     history_string = "MODEL NO HISTORY"
 
                 # print(history_string+", train size = " + str(train_fraction) + ", diss weight = " + str(diss_weight))
 
                 # get the old model predictions
-                Y_train_old_probabilities = old_model.predict_probabilities(X_train)
-                Y_train_old_labels = tf.round(Y_train_old_probabilities).eval()
-                Y_train_old_correct = tf.cast(tf.equal(Y_train_old_labels, Y_train), tf.float32).eval()
-                Y_test_old_probabilities = old_model.predict_probabilities(X_test)
-                Y_test_old_labels = tf.round(Y_test_old_probabilities).eval()
-                Y_test_old_correct = tf.cast(tf.equal(Y_test_old_labels, Y_test), tf.float32).eval()
+                # Y_train_old_probabilities = old_model.predict_probabilities(X_train)
+                # Y_train_old_labels = tf.round(Y_train_old_probabilities).eval()
+                # Y_train_old_correct = tf.cast(tf.equal(Y_train_old_labels, Y_train), tf.float32).eval()
 
-                if model_type in ['L1', 'L2', 'L3']:
-                    hist_Y_old_probabilities = old_model.predict_probabilities(history.instances)
-                    hist_Y_old_labels = tf.round(hist_Y_old_probabilities).eval()
-                    hist_Y_old_correct = tf.cast(tf.equal(hist_Y_old_labels, history.labels), tf.float32).eval()
+                # Y_test_old_probabilities = old_model.predict_probabilities(X_test)
+                # Y_test_old_labels = tf.round(Y_test_old_probabilities).eval()
+                # Y_test_old_correct = tf.cast(tf.equal(Y_test_old_labels, Y_test), tf.float32).eval()
+
+                # if model_type in ['L1', 'L2', 'L3', 'baseline']:
+                #     hist_Y_old_probabilities = old_model.predict_probabilities(history.instances)
+                #     hist_Y_old_labels = tf.round(hist_Y_old_probabilities).eval()
+                #     hist_Y_old_correct = tf.cast(tf.equal(hist_Y_old_labels, history.labels), tf.float32).eval()
 
                 for epoch in range(train_epochs):
                     # if epoch % 10 == 0:
@@ -373,7 +339,7 @@ class NeuralNetwork:
                                                 y_old_probabilities: Y_batch_old_probabilities,
                                                 y_old_correct: Y_batch_old_correct})
                         else:
-                            if model_type in ['L1', 'L2']:
+                            if model_name in ['L1', 'L2']:
                                 kernels_batch = kernels_train[batch_start:batch_end]
                                 sess.run(train_step,
                                          feed_dict={x: X_batch, y: Y_batch,
@@ -383,14 +349,14 @@ class NeuralNetwork:
                                                     hist_y: history.labels,
                                                     hist_y_old_correct: hist_Y_old_correct,
                                                     kernels: kernels_batch})
-                            elif model_type == 'L0':
+                            elif model_name == 'L0':
                                 likelihood_batch = likelihood_train[batch_start:batch_end]
                                 sess.run(train_step,
                                          feed_dict={x: X_batch, y: Y_batch,
                                                     y_old_probabilities: Y_batch_old_probabilities,
                                                     y_old_correct: Y_batch_old_correct,
                                                     likelihood: likelihood_batch})
-                            else:  # model == 'L3'
+                            elif model_name in ['L3', 'baseline']:
                                 sess.run(train_step,
                                          feed_dict={x: X_batch, y: Y_batch,
                                                     y_old_probabilities: Y_batch_old_probabilities,
@@ -399,52 +365,52 @@ class NeuralNetwork:
                                                     hist_y: history.labels,
                                                     hist_y_old_correct: hist_Y_old_correct})
 
-                if test_model:
-                    if history is None:
-                        out, com, new_correct, acc = sess.run(
-                            [output, compatibility, y_new_correct, accuracy],
-                            feed_dict={x: X_test, y: Y_test,
-                                       y_old_probabilities: Y_test_old_probabilities,
-                                       y_old_correct: Y_test_old_correct})
-                    else:
-                        if model_type in ['L1', 'L2']:
-                            if use_history:
-                                out, com, new_correct, _hist_diss, _kernel_likelihood, acc = sess.run(
-                                    [output, compatibility, y_new_correct, hist_dissonance, kernel_likelihood, accuracy],
-                                    feed_dict={x: X_test, y: Y_test,
-                                               y_old_probabilities: Y_test_old_probabilities,
-                                               y_old_correct: Y_test_old_correct,
-                                               hist_x: history.instances,
-                                               hist_y: history.labels,
-                                               hist_y_old_correct: hist_Y_old_correct,
-                                               kernels: kernels_test})
-                            else:
-                                out, com, new_correct, acc = sess.run(
-                                    [output, compatibility, y_new_correct, accuracy],
-                                    feed_dict={x: X_test, y: Y_test,
-                                               y_old_probabilities: Y_test_old_probabilities,
-                                               y_old_correct: Y_test_old_correct,
-                                               # hist_y: history.labels,
-                                               # hist_y_old_correct: hist_Y_old_correct,
-                                               kernels: kernels_test})
-                        else:
-                            out, com, new_correct, acc = sess.run(
-                                [output, compatibility, y_new_correct, accuracy],
-                                feed_dict={x: X_test, y: Y_test,
-                                           y_old_probabilities: Y_test_old_probabilities,
-                                           y_old_correct: Y_test_old_correct,
-                                           likelihood: likelihood_test})
-
-                    self.compatibility = com
-                    self.accuracy = sklearn.metrics.roc_auc_score(Y_test, out)
-                    # self.accuracy = acc
-                    self.new_correct = new_correct
-                    self.old_correct = Y_test_old_correct
-
-                    # print("FINISHED:\ttest auc = %.4f" % self.auc + ", compatibility = %.4f" % self.compatibility)
-                    print("test acc = %.4f" % self.accuracy + ", compatibility = %.4f" % self.compatibility)
-                    # print("log loss = "+str(np.sum(log_lss)))
-                    # print("dissonance = "+str(np.sum(diss)))
+                # if test_model:
+                #     if history is None:
+                #         out, com, new_correct, acc = sess.run(
+                #             [output, compatibility, y_new_correct, accuracy],
+                #             feed_dict={x: X_test, y: Y_test,
+                #                        y_old_probabilities: Y_test_old_probabilities,
+                #                        y_old_correct: Y_test_old_correct})
+                #     else:
+                #         if model_type in ['L1', 'L2']:
+                #             if use_history:
+                #                 out, com, new_correct, _hist_diss, _kernel_likelihood, acc = sess.run(
+                #                     [output, compatibility, y_new_correct, hist_dissonance, kernel_likelihood, accuracy],
+                #                     feed_dict={x: X_test, y: Y_test,
+                #                                y_old_probabilities: Y_test_old_probabilities,
+                #                                y_old_correct: Y_test_old_correct,
+                #                                hist_x: history.instances,
+                #                                hist_y: history.labels,
+                #                                hist_y_old_correct: hist_Y_old_correct,
+                #                                kernels: kernels_test})
+                #             else:
+                #                 out, com, new_correct, acc = sess.run(
+                #                     [output, compatibility, y_new_correct, accuracy],
+                #                     feed_dict={x: X_test, y: Y_test,
+                #                                y_old_probabilities: Y_test_old_probabilities,
+                #                                y_old_correct: Y_test_old_correct,
+                #                                # hist_y: history.labels,
+                #                                # hist_y_old_correct: hist_Y_old_correct,
+                #                                kernels: kernels_test})
+                #         else:
+                #             out, com, new_correct, acc = sess.run(
+                #                 [output, compatibility, y_new_correct, accuracy],
+                #                 feed_dict={x: X_test, y: Y_test,
+                #                            y_old_probabilities: Y_test_old_probabilities,
+                #                            y_old_correct: Y_test_old_correct,
+                #                            likelihood: likelihood_test})
+                #
+                #     self.compatibility = com
+                #     # self.accuracy = sklearn.metrics.roc_auc_score(Y_test, out)
+                #     self.accuracy = acc
+                #     self.new_correct = new_correct
+                #     self.old_correct = Y_test_old_correct
+                #
+                #     # print("FINISHED:\ttest auc = %.4f" % self.auc + ", compatibility = %.4f" % self.compatibility)
+                #     print("h1 acc = %.4f" % self.accuracy + ", compatibility = %.4f" % self.compatibility)
+                #     # print("log loss = "+str(np.sum(log_lss)))
+                #     # print("dissonance = "+str(np.sum(diss)))
 
             # save weights
             self.final_weights = []
@@ -453,8 +419,15 @@ class NeuralNetwork:
                 self.final_weights += [weights[i].eval()]
                 self.final_biases += [biases[i].eval()]
 
-            runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
-            print("runtime = " + str(runtime) + " secs\n")
+            if 'adaboost' in model_name:  # test on train set to set the model's ensemble weight
+                Y_train_new_probabilities = self.predict_probabilities(X_train)
+                Y_train_new_labels = np.round(Y_train_new_probabilities)
+                Y_train_new_correct = np.equal(Y_train_new_labels, Y_train).astype(int)
+                Y_train_new_incorrect = 1 - Y_train_new_correct
+
+                pred_error = np.mean(Y_train_new_incorrect)
+                new_ensemble_weight = ensemble_lr * np.log((1.0 - pred_error) / pred_error)
+                self.ensemble_weight = new_ensemble_weight
 
     def predict_probabilities(self, x):
         """
@@ -473,26 +446,30 @@ class NeuralNetwork:
         return activations[-1]
 
     def test(self, x, y, old_model=None, history=None):
-        new_output = self.predict_probabilities(x)
-        predicted = np.round(new_output)
-        y_new_correct = np.equal(predicted, y).astype(int)
-        accuracy = np.mean(y_new_correct)
 
-        if old_model is None:
-            # return sklearn.metrics.roc_auc_score(y, new_output)
-            return {'auc': accuracy, 'predicted': predicted}
+        new_output = self.predict_probabilities(x)
+
+        if 'adaboost' not in self.model_name:
+            y_new_predicted = np.round(new_output)
+            y_new_correct = np.equal(y_new_predicted, y).astype(int)
+            accuracy = np.mean(y_new_correct)
+            if old_model is None:  # testing pre-update model
+                # return sklearn.metrics.roc_auc_score(y, new_output)
+                return {'auc': accuracy, 'predicted': y_new_predicted}
 
         old_output = old_model.predict_probabilities(x)
         y_old_correct = np.equal(np.round(old_output), y).astype(int)
 
-        # if history is not None:
-        #     likelihood = history.likelihood
-        #     compatibility = np.sum(y_old_correct * y_new_correct * likelihood) / np.sum(y_old_correct * likelihood)
-        #
-        # else:
+        if 'adaboost' in self.model_name:
+            # normalize output to the range [-0.5, 0.5]
+            y_new_predicted = old_model.ensemble_weight * (old_output - 0.5) + self.ensemble_weight * (new_output - 0.5)
+            # translate sign into a prediction of either 0 or 1
+            y_new_predicted = np.greater(y_new_predicted, 0).astype(int)
+            y_new_correct = np.equal(y_new_predicted, y).astype(int)
+            accuracy = np.mean(y_new_correct)
+
         compatibility = np.sum(y_old_correct * y_new_correct) / np.sum(y_old_correct)
-        # return {'compatibility': compatibility.eval(), 'auc': sklearn.metrics.roc_auc_score(y, new_output)}
-        return {'compatibility': compatibility, 'auc': accuracy, 'predicted': predicted}
+        return {'compatibility': compatibility, 'auc': accuracy, 'predicted': y_new_predicted}
 
     def set_hybrid_test(self, history, x, method='stat', layers=None):
 
