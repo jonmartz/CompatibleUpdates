@@ -294,15 +294,17 @@ def get_fixed_std(df_model, h1_mean_acc, users_h1_accs, weighted=False):
 def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users, user_type='users',
                                   individual_user_id='', simple_plots=False, weighted=True, plot_std=True, alpha=0.2):
     labels_dict = {
-        # 'no hist': 'no hist',
-        'no hist': 'baseline',
+        'no hist': 'no hist',
         'L0': 'L0',
         'L1': 'L1',
         'L2': 'L2',
         'L3': 'L3',
+        'L4': 'L4',
         'hybrid': 'hybrid',
         'full_hybrid': 'full_hybrid',
         'baseline': 'baseline',
+        'adaboost': 'adaboost',
+        'comp_adaboost': 'comp_adaboost',
     }
     colors_dict = {
         'no hist': 'k',
@@ -310,9 +312,12 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
         'L1': 'purple',
         'L2': 'orange',
         'L3': 'r',
+        'L4': 'purple',
         'hybrid': 'g',
         'full_hybrid': 'c',
         'baseline': 'grey',
+        'adaboost': 'b',
+        'comp_adaboost': 'purple',
     }
     markers_dict = {
         'no hist': 'o',
@@ -320,9 +325,12 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
         'L1': '^',
         'L2': '<',
         'L3': '>',
+        'L4': '^',
         'hybrid': 'D',
-        'full_hybrid': 'o',
-        'baseline': '.'
+        'full_hybrid': 's',
+        'baseline': '.',
+        'adaboost': 'v',
+        'comp_adaboost': '^',
     }
     markersizes_dict = {
         'no hist': 4,
@@ -330,9 +338,12 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
         'L1': 6,
         'L2': 6,
         'L3': 6,
+        'L4': 6,
         'hybrid': 4,
         'full_hybrid': 4,
         'baseline': 4,
+        'adaboost': 6,
+        'comp_adaboost': 6,
     }
     labels = [labels_dict[i] for i in model_names]
     colors = [colors_dict[i] for i in model_names]
@@ -490,21 +501,8 @@ def split_users(log_path, hybrid_log_path, results_dir):
 
 
 def correlate_baseline_with_models(log_path, results_dir):
-    # df_result = pd.DataFrame({'user_id': ['1'],
-    #                           'hist_len': [1.0],
-    #                           'seed': [1.0],
-    #                           'model': ['1'],
-    #                           'pearson corr': [1.0],
-    #                           'pearson p-val': [1.0],
-    #                           'spearman corr': [1.0],
-    #                           'spearman p-val': [1.0]})
-    # df_result.drop(0)
-
     df_log = pd.read_csv(log_path)
     log_by_users = df_log.groupby('user_id')
-    # with open(results_path, 'w', newline='') as file_out:
-    #     writer = csv.writer(file_out)
-    # header = ['user_id', 'hist_len', 'seed', 'model', 'pearson corr', 'pearson p-val', 'spearman corr', 'spearman p-val']
     header = ['user_id', 'hist_len', 'seed', 'diss weight', 'h1 acc', 'baseline delta']
     models = []
     for col in df_log.drop(columns=['no hist x', 'no hist y', 'baseline x', 'baseline y']):
@@ -515,7 +513,6 @@ def correlate_baseline_with_models(log_path, results_dir):
                 # model + ' acc',
                 model + ' delta',
                 ]
-    # writer.writerow(header)
     df_result = pd.DataFrame(columns=header)
     diss_weights = df_log['diss weight'].unique()
     for user_id, user_log in log_by_users:
@@ -553,13 +550,7 @@ def correlate_baseline_with_models(log_path, results_dir):
                     model_y = user_seed_log[model + ' y']
                     no_hist_adjusted_y = pd.Series([get_y_given_x(no_hist_x, no_hist_y, x) for x in model_x])
                     model_y_delta = model_y - no_hist_adjusted_y  # delta from model y to no hist y in same x
-
-                    # model_y_delta = (model_y_delta - np.min(model_y_delta))/np.ptp(model_y_delta)
-
-                    # df_user_seed[model + ' acc'] = model_y
                     df_user_seed[model + ' delta'] = model_y_delta
-                    # pearson = pearsonr(baseline_y_delta, model_y_delta)
-                    # spearman = spearmanr(baseline_y_delta, model_y_delta)
 
             df_result = df_result.append(df_user_seed)
 
@@ -590,13 +581,10 @@ def get_y_given_x(X, Y, x):
 
 skip_users = []
 
-# dataset_name = 'salaries'
-# # version = 'no hist-L3-hybrid-baseline'
-# version = 'all models'
-# # user_types = ['all']
-# user_types = ['relationship']
-# # user_types = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
-# # skip_users = ['Husband']
+dataset_name = 'salaries'
+# version = 'no hist-L3-hybrid-baseline-adaboost-comp_adaboost'
+version = 'with L4'
+user_types = ['relationship']
 
 # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
 # version = '80 split [10] h1 500 h2 200 epochs\\'
@@ -607,13 +595,14 @@ skip_users = []
 # version = '80 split [] epochs h1 500 h2 800\\'
 # user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
 
-dataset_name = 'mooc'
-version = '80 split []\\'
-user_types = ['forum_uid']
+# dataset_name = 'mooc'
+# version = '80 split []\\'
+# user_types = ['forum_uid']
 
 # dataset_name = 'assistment'
-# # version = 'no hist-L3-hybrid-baseline'
-# version = '80 split [50]'
+# # version = 'no hist-L3-hybrid-baseline-adaboost-comp_adaboost'
+# version = 'layers []'
+# # version = '80 split [50]'
 # user_types = ['user_id']
 
 # dataset_name = 'abalone'
@@ -625,7 +614,7 @@ user_types = ['forum_uid']
 # user_types = ['MARITAL_STATUS']
 
 # analysis settings
-individual_users = False
+individual_users = True
 compute_auc = False
 correlation = False
 
@@ -633,8 +622,9 @@ correlation = False
 simple_plots = False
 weighted = True
 plot_std = True
+opacity = 0.15
 
-dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\no_hist_cross_val\\%s\\' % dataset_name
+dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\hist_cross_val\\%s\\' % dataset_name
 
 # model_names = version.split('-')
 
@@ -644,11 +634,11 @@ model_names = [
     # 'L1',
     # 'L2',
     'L3',
+    'L4',
     'hybrid',
     # 'full_hybrid',
-    # 'baseline',
+    'baseline',
 ]
-alpha = 0.15
 
 version += '\\'
 for user_type in user_types:
@@ -669,7 +659,7 @@ for user_type in user_types:
         safe_make_dir(results_dir)
         plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users,
                                       user_type=user_type, simple_plots=simple_plots, weighted=weighted,
-                                      plot_std=plot_std, alpha=alpha)
+                                      plot_std=plot_std, alpha=opacity)
     else:
         results_dir = dataset_path + version + 'averaged plots\\by user\\%s' % user_type
         if not os.path.exists(results_dir):
@@ -683,4 +673,4 @@ for user_type in user_types:
             user_hybrid_log_path = '%slog_by_user\\%s_hybrid_log.csv' % (user_type_dir, user_id)
             plots_averaged_over_all_users(user_log_path, user_hybrid_log_path, results_dir, model_names, skip_users,
                                           user_type=user_type, individual_user_id=user_id, simple_plots=simple_plots,
-                                          weighted=weighted, plot_std=plot_std, alpha=alpha)
+                                          weighted=weighted, plot_std=plot_std, alpha=opacity)
