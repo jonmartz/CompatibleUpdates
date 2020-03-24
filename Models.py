@@ -1,23 +1,25 @@
-import csv
-import os.path
-import shutil
-import sys
-import time
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import sklearn.metrics
-from sklearn.metrics import auc
 import tensorflow as tf
-from sklearn.preprocessing import LabelBinarizer
-from sklearn.preprocessing import MinMaxScaler
-import category_encoders as ce
-from sklearn.metrics import confusion_matrix
-from keras.models import Sequential
-from keras.layers import Dense, Dropout
-from keras.regularizers import L1L2
-import seaborn as sn
-import math
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# import csv
+# import os.path
+# import shutil
+# import sys
+# import time
+# import matplotlib.pyplot as plt
+# import pandas as pd
+# import sklearn.metrics
+# from sklearn.metrics import auc
+# from sklearn.preprocessing import LabelBinarizer
+# from sklearn.preprocessing import MinMaxScaler
+# import category_encoders as ce
+# from sklearn.metrics import confusion_matrix
+# from keras.models import Sequential
+# from keras.layers import Dense, Dropout
+# from keras.regularizers import L1L2
+# import seaborn as sn
+# import math
 
 
 class NeuralNet:
@@ -28,8 +30,8 @@ class NeuralNet:
 
     def __init__(self, X_train, Y_train, X_test, Y_test, batch_size, layers, model_name, min_train_epochs=100,
                  max_train_epochs=-1, diss_weight=None, old_model=None, copy_h1_weights=True, history=None,
-                 initial_std=1, weights_seed=1, regularization=0.0, plot_train=True, ensemble_lr=1.0, early_stop=True,
-                 acc_tier_height=0.01, max_same_tier_spree=100):
+                 initial_std=1, weights_seed=1, regularization=0.0, ensemble_lr=1.0,
+                 early_stop_mode='test acc', performance_tier_size=0.01, max_same_tier_spree=100, ):
 
         self.model_name = model_name
         self.old_model = old_model
@@ -137,7 +139,7 @@ class NeuralNet:
             else:
                 hist_logits = tf.matmul(hist_activations[-1], weights[-1]) + biases[-1]
 
-        if early_stop or plot_train:
+        if early_stop_mode != 'none':
             # model evaluation tensors
             correct_prediction = tf.equal(tf.round(output), y)
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="Accuracy")
@@ -226,15 +228,14 @@ class NeuralNet:
             sess.run(init_op)
             batches = int(len(X_train) / batch_size)
 
-            if early_stop or plot_train:
+            if early_stop_mode != 'none':
                 self.train_loss = []
                 self.train_acc = []
                 self.test_loss = []
                 self.test_acc = []
-                if early_stop:
+                if early_stop_mode != 'none':
                     self.best_epoch = 0
-                    # best_acc_tier = 0
-                    best_acc_tier = -1
+                    best_performance_tier = -1
                     same_tier_spree = 0
 
             epoch = 0
@@ -291,27 +292,37 @@ class NeuralNet:
                                                                   hist_y_old_correct: hist_Y_old_correct})[1]
                 self.train_loss += [epoch_loss]
 
-                if early_stop or plot_train:
-                    # train_acc = sess.run(accuracy, feed_dict={x: X_train, y: Y_train})
-                    # test_acc = sess.run(accuracy, feed_dict={x: X_test, y: Y_test})
-                    # self.train_acc += [train_acc]
-                    # self.test_acc += [test_acc]
+                if early_stop_mode != 'none':
+
+                    if early_stop_mode == 'train acc':
+                        train_acc = sess.run(accuracy, feed_dict={x: X_train, y: Y_train})
+                        self.train_acc += [train_acc]
+                    elif early_stop_mode == 'test acc':
+                        test_acc = sess.run(accuracy, feed_dict={x: X_test, y: Y_test})
+                        self.test_acc += [test_acc]
 
                     # check early stop condition
-                    if epoch > min_train_epochs and early_stop:
-                        # acc = train_acc
-                        # acc = test_acc  # little cheat to avoid overfitting
-                        if best_acc_tier == -1:
-                            best_acc_tier = epoch_loss + acc_tier_height
-                        # if acc > best_acc_tier - acc_tier_height:
-                        if epoch_loss < best_acc_tier + acc_tier_height:
+                    if epoch > min_train_epochs:
+                        if early_stop_mode == 'train loss':
+                            performance = epoch_loss
+                            if best_performance_tier == -1:  # set initial tier
+                                best_performance_tier = performance + performance_tier_size
+                            stayed_in_best_tier = performance < best_performance_tier + performance_tier_size
+                            got_new_best_tier = performance < best_performance_tier - performance_tier_size
+                        else:  # early stop on acc
+                            if early_stop_mode == 'train acc':
+                                performance = train_acc
+                            elif early_stop_mode == 'test acc':
+                                performance = test_acc  # little cheat to avoid over-fitting
+                            stayed_in_best_tier = performance > best_performance_tier - performance_tier_size
+                            got_new_best_tier = best_performance_tier + performance_tier_size
+
+                        if stayed_in_best_tier:
                             self.best_epoch = epoch
                             self.final_weights = [i.eval() for i in weights]
                             self.final_biases = [i.eval() for i in biases]
-                        # if acc > best_acc_tier + acc_tier_height:
-                        if epoch_loss < best_acc_tier - acc_tier_height:
-                            # best_acc_tier = acc
-                            best_acc_tier = epoch_loss
+                        if got_new_best_tier:
+                            best_performance_tier = performance
                             same_tier_spree = 0
                         else:
                             same_tier_spree += 1
@@ -326,10 +337,9 @@ class NeuralNet:
 
             # save parameters
             self.final_epochs = epoch
-            if not early_stop:
-                for i in range(len(weights)):
-                    self.final_weights += [weights[i].eval()]
-                    self.final_biases += [biases[i].eval()]
+            if early_stop_mode == 'none':
+                self.final_weights = [i.eval() for i in weights]
+                self.final_biases = [i.eval() for i in biases]
 
             if 'adaboost' in model_name:  # test on train set to set the new model's ensemble weight
                 Y_train_new_probabilities = self.predict_probabilities(X_train)

@@ -18,7 +18,6 @@ import Models
 # todo: hybrid with multi-label classification
 # todo: hist size sensitivity analysis (take one good user and shrink systematically)
 
-# tf.logging.set_verbosity(tf.logging.ERROR)
 
 def safe_make_dir(path):
     if not os.path.exists(path):
@@ -206,7 +205,7 @@ min_h1_epochs = -1
 max_h1_epochs = -1
 min_h2_epochs = -1
 max_h2_epochs = -1
-acc_tier_height = 0.1
+performance_tier_height = 0.01
 
 # dataset = "diabetes"
 # target_col = 'Outcome'
@@ -328,7 +327,7 @@ diss_weights = [0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0]
 # model settings
 models_to_test = [
     'no hist',
-    # 'L0',
+    'L0',
     # 'L1',
     # 'L2',
     'L3',
@@ -351,7 +350,7 @@ current_user_count = 0
 
 # plot settings
 make_tradeoff_plots = True
-make_train_plots = True
+make_train_plots = False
 show_tradeoff_plots = True
 show_train_plots = False
 plot_confusion = False
@@ -575,7 +574,7 @@ for user_col in user_cols:
             batch_size = h1_len
         h1 = Models.NeuralNet(X_train[:h1_len], Y_train[:h1_len], X_test, Y_test, batch_size, layers, 'h1',
                               min_h1_epochs, max_h1_epochs, weights_seed=1, regularization=regularization,
-                              acc_tier_height=acc_tier_height)
+                              performance_tier_size=performance_tier_height)
         runtime = int((round(time.time() * 1000)) - start_time) / 60000
         if only_one_batch:
             batch_size = len(Y_train)
@@ -611,7 +610,7 @@ for user_col in user_cols:
                     h2 = Models.NeuralNet(X_train, Y_train, X_test, Y_test, batch_size,
                                           layers, model_name, min_h2_epochs, max_h2_epochs, diss_weight=diss_weight,
                                           old_model=h1, copy_h1_weights=copy_h1_weights, weights_seed=2,
-                                          regularization=regularization, acc_tier_height=acc_tier_height)
+                                          regularization=regularization, performance_tier_size=performance_tier_height)
                     runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
                     print('\tdiss weight ' + str(len(h2s) + 1) + "/" + str(len(weights)) +
                           ' runtime = ' + str(runtime) + 's')
@@ -740,7 +739,7 @@ for user_col in user_cols:
                                                       model_name, min_h2_epochs, max_h2_epochs, diss_weight=weight,
                                                       old_model=h1, history=hist, copy_h1_weights=copy_h1_weights,
                                                       weights_seed=2, regularization=regularization,
-                                                      acc_tier_height=acc_tier_height)
+                                                      performance_tier_size=performance_tier_height)
                             else:  # no need to train new model if diss_weight = 0 and 'no hist' was already trained
                                 h2 = h2s_no_hist[j]
                             runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
