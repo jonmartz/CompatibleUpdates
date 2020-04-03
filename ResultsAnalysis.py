@@ -584,13 +584,14 @@ def get_y_given_x(X, Y, x):
 
 skip_users = []
 
-dataset_name = 'salaries'
-version = '1'
-user_types = ['relationship']
+# dataset_name = 'salaries'
+# version = '1'
+# user_types = ['relationship']
 
-# dataset_name = 'assistment'
-# version = 'layers []'
-# user_types = ['user_id']
+dataset_name = 'assistment'
+version = '1'
+# version = 'cpp tests'
+skip_user_types = ['0.0001', '0.001', '0.0005', '0.0007']
 
 # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
 # version = '80 split [10] h1 500 h2 200 epochs\\'
@@ -614,7 +615,7 @@ user_types = ['relationship']
 # user_types = ['MARITAL_STATUS']
 
 # analysis settings
-individual_users = True
+individual_users = False
 compute_auc = False
 correlation = False
 
@@ -633,17 +634,23 @@ model_names = [
     # 'L0',
     # 'L1',
     # 'L2',
-    'L3',
-    'L4',
-    'hybrid',
+    # 'L3',
+    # 'L4',
+    # 'hybrid',
     # 'full_hybrid',
-    'baseline',
+    # 'baseline',
     # 'adaboost',
     # 'comp_adaboost',
 ]
 
+# get user types
+root = dataset_path + version
+user_types = [i for i in os.listdir(root) if os.path.isdir(os.path.join(root, i))]
 version += '\\'
+
 for user_type in user_types:
+    if user_type in skip_user_types + ['averaged plots']:
+        continue
     user_type_dir = dataset_path + version + user_type + '\\'
     log_path = user_type_dir + 'log.csv'
     hybrid_log_path = user_type_dir + 'hybrid_log.csv'

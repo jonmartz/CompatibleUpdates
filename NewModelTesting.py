@@ -12,8 +12,7 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sn
 import Models
 
-# todo: implement using weighted decision trees
-# todo: L0 model with nn likelihood
+# todo: L0 model with learned likelihood
 # todo: hybrid with multi-label classification
 # todo: hist size sensitivity analysis (take one good user and shrink systematically)
 
@@ -71,99 +70,50 @@ def plot_confusion_matrix(predicted, true, title, path):
     # sn.reset_orig()
 
 
-def get_df_weights(weights, col_groups_dict, seed, model, diss_weight):
-    cols = []
-    mean_weights = []
-    for col_name, group in col_groups_dict.items():
-        cols += [col_name]
-        max_weight = weights[group].max()
-        min_weight = weights[group].min()
-        if abs(max_weight) > abs(min_weight):
-            mean_weights += [max_weight]
-        else:
-            mean_weights += [min_weight]
-        # mean_weights += [weights[group].mean()]
-    return pd.DataFrame({'seed': seed, 'model': model, 'diss_weight': diss_weight, 'col': cols, 'weight': mean_weights})
-
-
 def min_and_max(x):
     return pd.Series(index=['min', 'max'], data=[x.min(), x.max()])
 
-
-def make_train_plot(user, seed, model, weight, weight_id):
-    plot_x = list(range(model.final_epochs))
-    # plt.plot(plot_x, model.train_acc, label='train acc')
-    # plt.plot(plot_x, model.test_acc, label='test acc')
-    plt.plot(plot_x, model.train_loss, label='train loss')
-    plt.axvline(model.best_epoch, label='best epoch', color='k', linestyle='--')
-    plt.xlabel('epoch')
-    plt.ylabel('accuracy')
-    plt.legend()
-    plt.grid()
-    # todo: uncomment
-    # if only_train_h1:
-    #     plt.ylim(bottom, top)
-    plt.title('user=%s seed=%d model=%s weight=%.2f\nlayers=%s reg=%.4f'
-              % (user, seed, model.model_name, weight, str(layers), regularization))
-    path = '%s\\model_training\\user_%s seed_%d model_%s w_%d' % (result_dir, user, seed, model.model_name, weight_id)
-    plt.savefig(path)
-    if show_train_plots:
-        plt.show()
-    plt.clf()
-
-
 # Data-set paths
 
-# dataset_name = 'assistment'
-# target_col = 'correct'
-# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-# user_cols = ['user_id']
-# # users_to_not_test_on = problematic_users + [
-# #     78917,
-# #     78916,
-# #     75169,
-# #     78905,
-# #     78970,
-# #     78920,
-# #     78912,
-# #     78918,
-# #     78911,
-# #     78921,
-# #     78904,
-# #     78926,
-# #     78919,
-# # ]
-# users_to_not_test_on = [78534, 72059]
-# only_these_users = []
-# skip_cols = []
-# layers = []
-# df_max_size = 100000
-# train_frac = 0.8
-# h1_len = 200
-# h2_len = 5000
-# min_h1_epochs = 600
-# max_h1_epochs = -1
-# min_h2_epochs = 400
-# max_h2_epochs = -1
-# performance_tier_height = 0.1
-# early_stop_mode = 'train loss'
-
-dataset_name = "salaries"
-target_col = 'salary'
-original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-                       'native-country']
-# user_cols = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
-skip_cols = ['fnlgwt']
-user_cols = ['relationship']
-users_to_not_test_on = []
-only_these_users = []
-df_max_size = -1
-layers = []
+dataset_name = 'assistment'
+# data settings
+target_col = 'correct'
+original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+user_cols = ['user_id']
+skip_cols = []
+df_max_size = 100000
+# experiment settings
 train_frac = 0.8
 h1_len = 50
 h2_len = 5000
+seeds = range(20)
+num_weights = 10
+# model settings
 max_depth = None
-ccp_alpha = 0.002
+ccp_alpha = 0.0007
+# user settings
+min_hist_len = 200
+max_hist_len = 2000
+current_user_count = 0
+users_to_not_test_on = []
+only_these_users = []
+
+# dataset_name = "salaries"
+# target_col = 'salary'
+# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+#                        'native-country']
+# # user_cols = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
+# skip_cols = ['fnlgwt']
+# user_cols = ['relationship']
+# users_to_not_test_on = []
+# only_these_users = []
+# df_max_size = -1
+# layers = []
+# train_frac = 0.8
+# h1_len = 50
+# h2_len = 5000
+# max_depth = None
+# ccp_alpha = 0.002
 
 # dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\creditRiskAssessment\\heloc_dataset_v1.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\creditRiskAssessment.csv"
@@ -292,49 +242,31 @@ ccp_alpha = 0.002
 # pre-experiment modes
 
 # experiment scale
-seeds = range(30)
-num_weights = 1
+
 diss_weights = [i/num_weights for i in range(num_weights+1)]
 
 # model settings
-# classifier_type = 'nn'
-classifier_type = 'tree'
 models_to_test = [
     'no hist',
     # 'L0',
     # 'L1',
     # 'L2',
-    # 'L3',
-    # 'L4',
+    'L3',
+    'L4',
     'hybrid',
     # 'full_hybrid',
-    # 'baseline',
+    'baseline',
     # 'adaboost',
     # 'comp_adaboost',
 ]
-if classifier_type == 'nn':
-    batch_size = 128
-    regularization = 0
-    normalize_diss_weight = True
-    only_one_batch = False
-
-# user settings
-min_hist_len = 50
-max_hist_len = 2000
-current_user_count = 0
-
 
 # experiment settings
 chrono_split = False
-copy_h1_weights = False
 balance_histories = True
-only_train_h1 = False
 
 # plot settings
 make_tradeoff_plots = False
 show_tradeoff_plots = False
-make_train_plots = False
-show_train_plots = False
 plot_confusion = False
 
 # default settings
@@ -385,8 +317,8 @@ for user_col in user_cols:
     else:
         os.makedirs(result_dir)
     os.makedirs(result_dir + '\\user_plots')
-    os.makedirs(result_dir + '\\model_training')
-    os.makedirs(result_dir + '\\weights')
+    # os.makedirs(result_dir + '\\model_training')
+    # os.makedirs(result_dir + '\\weights')
 
     with open(result_dir + '\\log.csv', 'w', newline='') as log_file:
         with open(result_dir + '\\hybrid_log.csv', 'w', newline='') as hybrid_log_file:
@@ -432,7 +364,7 @@ for user_col in user_cols:
 
     # splitting histories
     print('balancing and sorting histories...')
-    groups_by_user = dataset_full.groupby(user_col)
+    groups_by_user = dataset_full.groupby(user_col, sort=False)
     dataset_full = dataset_full.drop(columns=[user_col])
     all_columns = list(dataset_full.columns)
     all_dtypes = list(dataset_full.dtypes)
@@ -441,9 +373,12 @@ for user_col in user_cols:
     # get user histories
     sorted_hists = []
     for seed in seeds:
+        print('\tseed %d' % seed)
         hists = {}
         for user_id in groups_by_user.groups.keys():
             hist = groups_by_user.get_group(user_id).drop(columns=[user_col])
+            if len(hist) < min_hist_len:
+                continue
             if balance_histories:
                 target_groups = hist.groupby(target_col)
                 if len(target_groups) == 1:  # only one target label present in history: skip
@@ -467,6 +402,7 @@ for user_col in user_cols:
     user_ids = []
     min_and_max_feature_values = pd.DataFrame(columns=all_columns, dtype=np.int64)
     for seed in seeds:
+        print('\tseed %d'%seed)
         # take longest n histories such that train_frac * sum of lens <= h2 train size
         hist_train_ranges = {}
         hist_trains = {}
@@ -474,8 +410,10 @@ for user_col in user_cols:
         h2_train = pd.DataFrame(columns=all_columns, dtype=np.int64)
         h2_test = pd.DataFrame(columns=all_columns, dtype=np.int64)
         total_len = 0
+        users_checked = 0
         for user_id, hist in sorted_hists[seed]:
-            min_and_max_feature_values = min_and_max_feature_values.append(hist.apply(min_and_max))
+            users_checked += 1
+            print('\t\tuser %d/%d' % (users_checked, len(sorted_hists[seed])))
 
             # attempt to add user hist
             hist_len = len(hist)
@@ -500,9 +438,11 @@ for user_col in user_cols:
                 total_len += hist_len
                 h2_train = h2_train.append(hist_train)
                 h2_test = h2_test.append(hist_test)
+                min_and_max_feature_values = min_and_max_feature_values.append(hist.apply(min_and_max))
 
                 if train_frac * (total_len + min_hist_len) > h2_len:  # cannot add more users
                     break
+
         hist_train_ranges_by_seed += [hist_train_ranges]
         hist_trains_by_seed += [hist_trains]
         hist_tests_by_seed += [hist_tests]
@@ -535,12 +475,6 @@ for user_col in user_cols:
         if model_name == 'comp_adaboost':
             comp_adaboosts_by_seed = []
 
-    if only_train_h1:
-        print('\nusing cross validation\n')
-        bottom, top = 0.4, 1.02
-
-    df_weights = pd.DataFrame(columns=['seed', 'model', 'diss_weight', 'col', 'weight'])
-
     # train h1 and h2s by seed
     for seed_idx in range(len(seeds)):
         seed = seeds[seed_idx]
@@ -560,85 +494,37 @@ for user_col in user_cols:
         Y_test_by_seed += [Y_test]
 
         # train h1
-        start_time = int(round(time.time() * 1000))
-
-        if classifier_type == 'nn':
-            if only_one_batch:
-                batch_size = h1_len
-            h1 = Models.NeuralNet(X_train[:h1_len], Y_train[:h1_len], X_test, Y_test, batch_size, layers, 'h1',
-                                  min_h1_epochs, max_h1_epochs, weights_seed=1, regularization=regularization,
-                                  performance_tier_size=performance_tier_height, early_stop_mode=early_stop_mode)
-            if only_one_batch:
-                batch_size = len(Y_train)
-        elif classifier_type == 'tree':
-            h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, X_test, Y_test,
-                                     max_depth=max_depth)
-
-        runtime = int((round(time.time() * 1000)) - start_time) / 60000
+        h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, X_test, Y_test,
+                                 max_depth=max_depth)
         h1_by_seed += [h1]
 
-        if classifier_type == 'nn':
-            df_weights = df_weights.append(
-                get_df_weights(h1.final_weights[0], col_groups_dict, seed, 'h1', 0))
-
-        if make_train_plots:
-            make_train_plot('test', seed, h1, 0, 0)
-
         # train h2s that ignore history
-        if not only_train_h1:
-            for model_name in models_to_test:
-                if model_name == 'no hist':
-                    weights = diss_weights
-                    h2s_by_seed = h2s_no_hist_by_seed
-                elif 'adaboost' in model_name:
-                    weights = diss_weights
-                    if model_name == 'adaboost':
-                        h2s_by_seed = adaboosts_by_seed
-                    elif model_name == 'comp_adaboost':
-                        h2s_by_seed = comp_adaboosts_by_seed
-                else:  # model that needs user history
-                    continue
-                h2s = []
-                first_diss_weight = True
-                weight_id = 0
+        for model_name in models_to_test:
+            if model_name == 'no hist':
+                weights = diss_weights
+                h2s_by_seed = h2s_no_hist_by_seed
+            elif 'adaboost' in model_name:
+                weights = diss_weights
+                if model_name == 'adaboost':
+                    h2s_by_seed = adaboosts_by_seed
+                elif model_name == 'comp_adaboost':
+                    h2s_by_seed = comp_adaboosts_by_seed
+            else:  # model that needs user history
+                continue
+            h2s = []
+            first_diss_weight = True
+            weight_id = 0
 
-                start_time = int(round(time.time() * 1000))
-                for diss_weight in weights:
-                    # start_time = int(round(time.time() * 1000))
+            start_time = int(round(time.time() * 1000))
+            for diss_weight in weights:
+                h2 = Models.DecisionTree(X_train, Y_train, model_name, ccp_alpha, X_test, Y_test, old_model=h1,
+                                         diss_weight=diss_weight)
+                h2s += [h2]
+                weight_id += 1
 
-                    if classifier_type == 'nn':
-                        h2 = Models.NeuralNet(X_train, Y_train, X_test, Y_test, batch_size,
-                                              layers, model_name, min_h2_epochs, max_h2_epochs, diss_weight=diss_weight,
-                                              old_model=h1, copy_h1_weights=copy_h1_weights, weights_seed=2,
-                                              regularization=regularization,
-                                              performance_tier_size=performance_tier_height,
-                                              early_stop_mode=early_stop_mode)
-                    elif classifier_type == 'tree':
-                        h2 = Models.DecisionTree(X_train, Y_train, model_name, ccp_alpha, X_test, Y_test, old_model=h1,
-                                                 diss_weight=diss_weight)
-
-                    # runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
-                    # print('\tdiss weight ' + str(len(h2s) + 1) + "/" + str(len(weights)) +
-                    #       ' runtime = ' + str(runtime) + 's')
-                    h2s += [h2]
-
-                    if classifier_type == 'nn':
-                        df_weights = df_weights.append(
-                            get_df_weights(h2.final_weights[0], col_groups_dict, seed, model_name, diss_weight))
-
-                    if make_train_plots:
-                        make_train_plot('test', seed, h2, diss_weight, weight_id)
-
-                    weight_id += 1
-
-                runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
-                print('trained ' + model_name + ' models in ' + str(runtime))
-
-                h2s_by_seed += [h2s]
-
-    df_weights.to_csv('%s\\weights\\no_personalization_weights.csv' % result_dir, index=False)
-    if only_train_h1:
-        continue
+            runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
+            print('trained ' + model_name + ' models in ' + str(runtime))
+            h2s_by_seed += [h2s]
 
     # test all models on all users for all seeds
     if len(only_these_users) > 0:
@@ -674,10 +560,6 @@ for user_col in user_cols:
             if 'comp_adaboost' in models_to_test:
                 comp_adaboosts = comp_adaboosts_by_seed[seed_idx]
 
-            if classifier_type == 'nn':
-                if only_one_batch:
-                    batch_size = len(Y_train)
-
             # prepare hist
             hist_train_x = scaler.transform(hist_train.drop(columns=[target_col]))
             hist_train_y = labelizer.transform(hist_train[[target_col]])
@@ -711,7 +593,6 @@ for user_col in user_cols:
                 hist.set_kernels(X_train, magnitude_multiplier=10)
 
             # test all models
-            df_weights = pd.DataFrame(columns=['seed', 'model', 'diss_weight', 'col', 'weight'])
             models_x = []
             models_y = []
             for i in range(len(models_to_test)):
@@ -730,12 +611,7 @@ for user_col in user_cols:
                         history_for_hybrid = hist
                     elif model_name == 'full_hybrid':
                         history_for_hybrid = Models.History(X_train, Y_train, X_test, Y_test)
-                    # h2.set_hybrid_test(history_for_hybrid, hist_test_x, hybrid_method, layers)
                     h2.set_hybrid_test(history_for_hybrid, hist_test_x)
-
-                    if classifier_type == 'nn':
-                        df_weights = df_weights.append(
-                            get_df_weights(h2.hybrid_feature_weights, col_groups_dict, seed, model_name, 0))
 
                 start_time = int(round(time.time() * 1000))
                 for j in range(len(weights)):
@@ -752,30 +628,11 @@ for user_col in user_cols:
                         else:
                             # start_time = int(round(time.time() * 1000))
                             if ('adaboost' not in model_name and weight > 0) or 'no hist' not in models_to_test:
-
-                                if classifier_type == 'nn':
-                                    h2 = Models.NeuralNet(X_train, Y_train, hist_test_x, hist_test_y, batch_size, layers,
-                                                          model_name, min_h2_epochs, max_h2_epochs, diss_weight=weight,
-                                                          old_model=h1, history=hist, copy_h1_weights=copy_h1_weights,
-                                                          weights_seed=2, regularization=regularization,
-                                                          performance_tier_size=performance_tier_height,
-                                                          early_stop_mode=early_stop_mode)
-                                elif classifier_type == 'tree':
-                                    h2 = Models.DecisionTree(X_train, Y_train, model_name, ccp_alpha, hist_test_x,
-                                                             hist_test_y, old_model=h1, diss_weight=weight, hist=hist)
-
+                                h2 = Models.DecisionTree(X_train, Y_train, model_name, ccp_alpha, hist_test_x,
+                                                         hist_test_y, old_model=h1, diss_weight=weight, hist=hist)
                             else:  # no need to train new model if diss_weight = 0 and 'no hist' was already trained
                                 h2 = h2s_no_hist[j]
-
                             result = h2.test(hist_test_x, hist_test_y, h1)
-
-                            if classifier_type == 'nn':
-                                df_weights = df_weights.append(
-                                    get_df_weights(h2.final_weights[0], col_groups_dict, seed, model_name, weight))
-
-                            if make_train_plots:
-                                make_train_plot(str(user_id), seed, h2, weight, j)
-
                     model_x += [result['compatibility']]
                     model_y += [result['auc']]
 
@@ -786,9 +643,7 @@ for user_col in user_cols:
                         plot_confusion_matrix(result['predicted'], hist_test_y, title, path)
 
                 runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
-                print('\t%d/%d model %s time=%ssec' % (i + 1, len(models_to_test), model_name, str(runtime)))
-
-            df_weights.to_csv('%s\\weights\\%s_weights.csv' % (result_dir, str(user_id)), index=False)
+                print('\t%d/%d %s %ss' % (i + 1, len(models_to_test), model_name, str(runtime)))
 
             min_x = min(min(i) for i in models_x)
             min_y = min(min(i) for i in models_y)
@@ -799,7 +654,6 @@ for user_col in user_cols:
             auc_range = max_y - min_y
 
             if make_tradeoff_plots:
-
                 h1_x = [min_x, max_x]
                 h1_y = [h1_acc, h1_acc]
                 plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
@@ -826,8 +680,7 @@ for user_col in user_cols:
                 plt.ylabel('accuracy')
                 plt.grid()
                 plt.legend()
-                title = 'user=' + str(user_id) + ' hist_len=' + str(history_len) + ' split=' \
-                        + str(train_frac) + ' seed=' + str(seed)
+                title = 'user=%s hist_len=%d split=%.1f seed=%d' % (str(user_id), history_len, train_frac, seed)
                 plt.title(title)
                 plt.savefig(
                     result_dir + '\\user_plots\\' + user_col + '_' + str(user_id) + '_seed_' + str(seed) + '.png')
