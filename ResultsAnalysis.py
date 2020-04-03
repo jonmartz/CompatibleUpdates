@@ -294,12 +294,12 @@ def get_fixed_std(df_model, h1_mean_acc, users_h1_accs, weighted=False):
 def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users, user_type='users',
                                   individual_user_id='', simple_plots=False, weighted=True, plot_std=True, alpha=0.2):
     labels_dict = {
-        'no hist': 'no hist',
-        'L0': 'L0',
-        'L1': 'L1',
-        'L2': 'L2',
-        'L3': 'L3',
-        'L4': 'L4',
+        'no hist': 'no history',
+        'L0': 'old L0',
+        'L1': 'old L1',
+        'L2': 'old L2',
+        'L3': 'L0',
+        'L4': 'L1',
         'hybrid': 'hybrid',
         'full_hybrid': 'full_hybrid',
         'baseline': 'baseline',
@@ -312,12 +312,12 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
         'L1': 'purple',
         'L2': 'orange',
         'L3': 'r',
-        'L4': 'purple',
+        'L4': 'b',
         'hybrid': 'g',
         'full_hybrid': 'c',
         'baseline': 'grey',
-        'adaboost': 'b',
-        'comp_adaboost': 'purple',
+        'adaboost': 'purple',
+        'comp_adaboost': 'orange',
     }
     markers_dict = {
         'no hist': 'o',
@@ -329,8 +329,8 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
         'hybrid': 'D',
         'full_hybrid': 's',
         'baseline': '.',
-        'adaboost': 'v',
-        'comp_adaboost': '^',
+        'adaboost': '<',
+        'comp_adaboost': 'v',
     }
     markersizes_dict = {
         'no hist': 4,
@@ -351,10 +351,12 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
     markersizes = [markersizes_dict[i] for i in model_names]
 
     log_df = pd.read_csv(log_path)
-    hybrid_log_df = pd.read_csv(hybrid_log_path)
+    if 'hybrid' in model_names:
+        hybrid_log_df = pd.read_csv(hybrid_log_path)
 
     log_by_users = log_df.groupby(['user_id'])
-    hybrid_log_by_users = hybrid_log_df.groupby(['user_id'])
+    if 'hybrid' in model_names:
+        hybrid_log_by_users = hybrid_log_df.groupby(['user_id'])
 
     user_ids = log_df.user_id.unique()
 
@@ -368,7 +370,8 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
         print(str(user_count) + '/' + str(len(user_ids)) + ' user ' + str(user_id))
 
         user_log = log_by_users.get_group(user_id).reset_index(drop=True).groupby('diss weight').mean()
-        user_hybrid_log = hybrid_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
+        if 'hybrid' in model_names:
+            user_hybrid_log = hybrid_log_by_users.get_group(user_id).reset_index(drop=True).groupby('std offset').mean()
 
         size = user_log['instances'][0]
 
@@ -582,9 +585,12 @@ def get_y_given_x(X, Y, x):
 skip_users = []
 
 dataset_name = 'salaries'
-# version = 'no hist-L3-hybrid-baseline-adaboost-comp_adaboost'
-version = 'with L4'
+version = '1'
 user_types = ['relationship']
+
+# dataset_name = 'assistment'
+# version = 'layers []'
+# user_types = ['user_id']
 
 # dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
 # version = '80 split [10] h1 500 h2 200 epochs\\'
@@ -598,12 +604,6 @@ user_types = ['relationship']
 # dataset_name = 'mooc'
 # version = '80 split []\\'
 # user_types = ['forum_uid']
-
-# dataset_name = 'assistment'
-# # version = 'no hist-L3-hybrid-baseline-adaboost-comp_adaboost'
-# version = 'layers []'
-# # version = '80 split [50]'
-# user_types = ['user_id']
 
 # dataset_name = 'abalone'
 # version = '80 split [5]\\'
@@ -624,7 +624,7 @@ weighted = True
 plot_std = True
 opacity = 0.15
 
-dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\hist_cross_val\\%s\\' % dataset_name
+dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\decision trees\\%s\\' % dataset_name
 
 # model_names = version.split('-')
 
@@ -638,6 +638,8 @@ model_names = [
     'hybrid',
     # 'full_hybrid',
     'baseline',
+    # 'adaboost',
+    # 'comp_adaboost',
 ]
 
 version += '\\'
