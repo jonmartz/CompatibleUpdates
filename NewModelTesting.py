@@ -12,6 +12,7 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sn
 import Models
 
+
 # todo: L0 model with learned likelihood
 # todo: hybrid with multi-label classification
 # todo: hist size sensitivity analysis (take one good user and shrink systematically)
@@ -73,65 +74,131 @@ def plot_confusion_matrix(predicted, true, title, path):
 def min_and_max(x):
     return pd.Series(index=['min', 'max'], data=[x.min(), x.max()])
 
+
 # Data-set paths
 
-dataset_name = 'assistment'
+# dataset_name = 'assistment'
+# # data settings
+# target_col = 'correct'
+# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+# user_cols = ['user_id']
+# skip_cols = []
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.8
+# h1_len = 10
+# h2_len = 5000
+# seeds = range(5)
+# weights_num = 10
+# weights_range = [0, 1]
+# # model settings
+# max_depth = None
+# ccp_alphas = []
+# ccp_alpha = 0.001
+# # user settings
+# min_hist_len = 200
+# max_hist_len = 2000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
+
+# dataset_name = "salaries"
+# # data settings
+# target_col = 'salary'
+# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+#                        'native-country']
+# user_cols = ['relationship']
+# skip_cols = ['fnlgwt']
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.8
+# h1_len = 50
+# h2_len = 5000
+# seeds = range(30)
+# weights_num = 10
+# weights_range = [0, 1]
+# # model settings
+# max_depth = None
+# ccp_alpha = 0.002
+# # user settings
+# min_hist_len = 50
+# max_hist_len = 2000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
+
+dataset_name = "recividism"
 # data settings
-target_col = 'correct'
-original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-user_cols = ['user_id']
-skip_cols = []
+target_col = 'is_recid'
+original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text']
+user_cols = ['race']
+skip_cols = ['c_charge_desc', 'priors_count']
 df_max_size = 100000
 # experiment settings
 train_frac = 0.8
 h1_len = 50
 h2_len = 5000
-seeds = range(20)
-num_weights = 10
+seeds = range(5)
+weights_num = 5
+weights_range = [0, 1]
 # model settings
 max_depth = None
-ccp_alpha = 0.0007
+ccp_alpha = 0.002
 # user settings
-min_hist_len = 200
+min_hist_len = 50
 max_hist_len = 2000
 current_user_count = 0
 users_to_not_test_on = []
 only_these_users = []
 
-# dataset_name = "salaries"
-# target_col = 'salary'
-# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-#                        'native-country']
-# # user_cols = ['relationship', 'race', 'education', 'occupation', 'marital-status', 'workclass', 'sex', 'native-country']
-# skip_cols = ['fnlgwt']
-# user_cols = ['relationship']
-# users_to_not_test_on = []
-# only_these_users = []
-# df_max_size = -1
-# layers = []
+# dataset_name = "hospital_mortality"
+# # data settings
+# target_col = 'HOSPITAL_EXPIRE_FLAG'
+# original_categ_cols = ['ADMISSION_TYPE', 'ADMISSION_LOCATION', 'INSURANCE', 'RELIGION', 'MARITAL_STATUS', 'ETHNICITY']
+# # user_cols = ['MARITAL_STATUS']
+# user_cols = ['ADMISSION_TYPE', 'ETHNICITY']
+# skip_cols = []
+# df_max_size = 100000
+# # experiment settings
 # train_frac = 0.8
 # h1_len = 50
 # h2_len = 5000
+# seeds = range(30)
+# weights_num = 10
+# weights_range = [0, 1]
+# # model settings
 # max_depth = None
-# ccp_alpha = 0.002
+# ccp_alpha = 0.001
+# # user settings
+# min_hist_len = 50
+# max_hist_len = 2000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
 
-# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\creditRiskAssessment\\heloc_dataset_v1.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\creditRiskAssessment.csv"
-# target_col = 'RiskPerformance'
-
-# full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\recividism\\recividism.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism"
-# target_col = 'is_recid'
-# original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text']
-# user_cols = ['race', 'sex', 'age_cat', 'c_charge_degree', 'score_text']
-# skip_cols = ['c_charge_desc', 'priors_count']
-# # skip_cols = ['c_charge_desc', 'age_cat', 'juv_fel_count', 'juv_misd_count', 'juv_other_count', 'score_text', 'decile_score']
-# df_max_size = -1
-# layers = []
-
-# dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\fraudDetection\\transactions.csv'
-# results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\fraudDetection.csv"
-# target_col = 'isFraud'
+# dataset_name = "mooc"
+# # data settings
+# target_col = 'Opinion(1/0)'
+# original_categ_cols = ['course_display_name', 'post_type', 'CourseType']
+# user_cols = ['forum_uid']
+# skip_cols = ['up_count', 'reads']
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.8
+# h1_len = 50
+# h2_len = 5000
+# seeds = range(10)
+# weights_num = 10
+# weights_range = [0, 1]
+# # model settings
+# max_depth = None
+# ccp_alpha = 0.001
+# # user settings
+# min_hist_len = 50
+# max_hist_len = 2000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
 
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\mallzee\\mallzee.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\mallzee"
@@ -178,23 +245,6 @@ only_these_users = []
 # h1_epochs = 300
 # h2_epochs = 300
 
-# dataset_name = 'hospital_mortality'
-# target_col = 'HOSPITAL_EXPIRE_FLAG'
-# original_categ_cols = ['ADMISSION_TYPE', 'ADMISSION_LOCATION', 'INSURANCE', 'RELIGION', 'MARITAL_STATUS', 'ETHNICITY']
-# user_cols = ['MARITAL_STATUS']
-# users_to_not_test_on = []
-# only_these_users = []
-# skip_cols = []
-# df_max_size = -1
-# layers = []
-# train_frac = 0.8
-# h1_len = 200
-# h2_len = 5000
-# h1_epochs = 400
-# h2_epochs = 200
-
-# selecting experiment parameters
-
 # full_dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\titanic\\titanic.csv'
 # results_path = "C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic"
 # target_col = 'Survived'
@@ -222,29 +272,6 @@ only_these_users = []
 # h1_epochs = 200
 # h2_epochs = 200
 
-# dataset = 'mooc'
-# target_col = 'Opinion(1/0)'
-# # target_col = 'Question(1/0)'
-# # target_col = 'Answer(1/0)'
-# original_categ_cols = ['course_display_name', 'post_type', 'CourseType']
-# user_cols = ['forum_uid']
-# skip_cols = ['up_count', 'reads']
-# layers = []
-# df_max_size = -1
-# train_frac = 0.8
-# h1_len = 100
-# h2_len = 5000
-# h1_epochs = 300
-# h2_epochs = 200
-
-# users_to_not_test_on = [0, 18, 5747]
-
-# pre-experiment modes
-
-# experiment scale
-
-diss_weights = [i/num_weights for i in range(num_weights+1)]
-
 # model settings
 models_to_test = [
     'no hist',
@@ -255,21 +282,25 @@ models_to_test = [
     'L4',
     'hybrid',
     # 'full_hybrid',
-    'baseline',
+    # 'baseline',
     # 'adaboost',
     # 'comp_adaboost',
 ]
-
-# experiment settings
-chrono_split = False
-balance_histories = True
 
 # plot settings
 make_tradeoff_plots = False
 show_tradeoff_plots = False
 plot_confusion = False
 
+# experiment settings
+chrono_split = False
+balance_histories = True
+sim_ann = True
+
 # default settings
+diss_weights = np.array([i / weights_num for i in range(weights_num + 1)])
+diss_weights = diss_weights * (weights_range[1] - weights_range[0]) + weights_range[0]
+print('diss_weights = %s' % diss_weights)
 range_stds = range(-30, 30, 2)
 hybrid_stds = list((-x / 10 for x in range_stds))
 colors = {
@@ -285,7 +316,6 @@ colors = {
     'adaboost': 'blueviolet',
     'comp_adaboost': 'y',
 }
-hybrid_method = 'nn'
 
 # skip cols
 user_cols_not_skipped = []
@@ -302,8 +332,22 @@ original_categ_cols = original_categs_not_skipped
 dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' \
                % (dataset_name, dataset_name)
 
+result_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\current result'
+if os.path.exists(result_dir):
+    shutil.rmtree(result_dir)
+else:
+    os.makedirs(result_dir)
+with open('%s\\parameters.csv' % result_dir, 'w', newline='') as file_out:
+    writer = csv.writer(file_out)
+    writer.writerow(['train_frac', 'ccp_alpha', 'dataset_max_size', 'h1_len', 'h2_len', 'seeds', 'weights_num',
+                     'weights_range', 'min_hist_len', 'max_hist_len'])
+    writer.writerow([train_frac, ccp_alpha, df_max_size, h1_len, h2_len, len(seeds), weights_num,
+                     str(weights_range), min_hist_len, max_hist_len])
+
 # run whole experiment for each user column selection
 for user_col in user_cols:
+    print('USER COLUMN = %s' % user_col)
+
     categ_cols = original_categ_cols.copy()
     try:  # dont one hot encode the user_col
         categ_cols.remove(user_col)
@@ -312,21 +356,17 @@ for user_col in user_cols:
 
     # create all folders
     result_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\current result\\' + user_col
-    if os.path.exists(result_dir):
-        shutil.rmtree(result_dir)
-    else:
-        os.makedirs(result_dir)
-    os.makedirs(result_dir + '\\user_plots')
-    # os.makedirs(result_dir + '\\model_training')
-    # os.makedirs(result_dir + '\\weights')
+    os.makedirs(result_dir)
+    if make_tradeoff_plots:
+        os.makedirs(result_dir + '\\user_plots')
 
     with open(result_dir + '\\log.csv', 'w', newline='') as log_file:
         with open(result_dir + '\\hybrid_log.csv', 'w', newline='') as hybrid_log_file:
             log_writer = csv.writer(log_file)
             hybrid_log_writer = csv.writer(hybrid_log_file)
-            log_header = ['train frac', 'user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc',
+            log_header = ['user_id', 'instances', 'train seed', 'comp range', 'acc range', 'h1 acc',
                           'diss weight']
-            hybrid_log_header = ['train frac', 'user_id', 'instances', 'train seed', 'std offset']
+            hybrid_log_header = ['user_id', 'instances', 'train seed', 'std offset']
             for name in models_to_test:
                 if 'hybrid' not in name:
                     log_header += [name + ' x', name + ' y']
@@ -334,6 +374,11 @@ for user_col in user_cols:
                     hybrid_log_header += [name + ' x', name + ' y']
             log_writer.writerow(log_header)
             hybrid_log_writer.writerow(hybrid_log_header)
+
+    if sim_ann:
+        with open(result_dir + '\\sim_ann.csv', 'w', newline='') as sim_ann_file:
+            writer = csv.writer(sim_ann_file)
+            log_writer.writerow(['iteration', 'general_loss', 'general_diss', 'hist_loss', 'hist_diss', 'AUTC'])
 
     # load data
     print('loading data...')
@@ -343,7 +388,6 @@ for user_col in user_cols:
     for col in skip_cols:
         del dataset_full[col]
 
-    # if classifier_type == 'nn':
     # pre-processing for one hot encoding
     col_groups_dict = {}
     categs_unique_values = dataset_full[categ_cols].nunique()
@@ -402,7 +446,6 @@ for user_col in user_cols:
     user_ids = []
     min_and_max_feature_values = pd.DataFrame(columns=all_columns, dtype=np.int64)
     for seed in seeds:
-        print('\tseed %d'%seed)
         # take longest n histories such that train_frac * sum of lens <= h2 train size
         hist_train_ranges = {}
         hist_trains = {}
@@ -413,7 +456,7 @@ for user_col in user_cols:
         users_checked = 0
         for user_id, hist in sorted_hists[seed]:
             users_checked += 1
-            print('\t\tuser %d/%d' % (users_checked, len(sorted_hists[seed])))
+            # print('\t\tuser %d/%d' % (users_checked, len(sorted_hists[seed])))
 
             # attempt to add user hist
             hist_len = len(hist)
@@ -442,6 +485,7 @@ for user_col in user_cols:
 
                 if train_frac * (total_len + min_hist_len) > h2_len:  # cannot add more users
                     break
+        print('\tseed %d users checked = %d' % (seed, users_checked))
 
         hist_train_ranges_by_seed += [hist_train_ranges]
         hist_trains_by_seed += [hist_trains]
@@ -476,9 +520,9 @@ for user_col in user_cols:
             comp_adaboosts_by_seed = []
 
     # train h1 and h2s by seed
+    print('splitting train and test sets into x and y...')
     for seed_idx in range(len(seeds)):
         seed = seeds[seed_idx]
-        print('\ntraining general models for seed %d...' % seed)
 
         # separate train set into X and Y
         h2_train = h2_train_by_seed[seed_idx]
@@ -493,38 +537,42 @@ for user_col in user_cols:
         X_test_by_seed += [X_test]
         Y_test_by_seed += [Y_test]
 
-        # train h1
-        h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, X_test, Y_test,
-                                 max_depth=max_depth)
-        h1_by_seed += [h1]
+        if not sim_ann:
 
-        # train h2s that ignore history
-        for model_name in models_to_test:
-            if model_name == 'no hist':
-                weights = diss_weights
-                h2s_by_seed = h2s_no_hist_by_seed
-            elif 'adaboost' in model_name:
-                weights = diss_weights
-                if model_name == 'adaboost':
-                    h2s_by_seed = adaboosts_by_seed
-                elif model_name == 'comp_adaboost':
-                    h2s_by_seed = comp_adaboosts_by_seed
-            else:  # model that needs user history
-                continue
-            h2s = []
-            first_diss_weight = True
-            weight_id = 0
+            print('\ntraining general models for seed %d...' % seed)
 
-            start_time = int(round(time.time() * 1000))
-            for diss_weight in weights:
-                h2 = Models.DecisionTree(X_train, Y_train, model_name, ccp_alpha, X_test, Y_test, old_model=h1,
-                                         diss_weight=diss_weight)
-                h2s += [h2]
-                weight_id += 1
+            # train h1
+            h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, X_test, Y_test,
+                                     max_depth=max_depth)
+            h1_by_seed += [h1]
 
-            runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
-            print('trained ' + model_name + ' models in ' + str(runtime))
-            h2s_by_seed += [h2s]
+            # train h2s that ignore history
+            for model_name in models_to_test:
+                if model_name == 'no hist':
+                    weights = diss_weights
+                    h2s_by_seed = h2s_no_hist_by_seed
+                elif 'adaboost' in model_name:
+                    weights = diss_weights
+                    if model_name == 'adaboost':
+                        h2s_by_seed = adaboosts_by_seed
+                    elif model_name == 'comp_adaboost':
+                        h2s_by_seed = comp_adaboosts_by_seed
+                else:  # model that needs user history
+                    continue
+                h2s = []
+                first_diss_weight = True
+                weight_id = 0
+
+                start_time = int(round(time.time() * 1000))
+                for diss_weight in weights:
+                    h2 = Models.DecisionTree(X_train, Y_train, model_name, ccp_alpha, X_test, Y_test, old_model=h1,
+                                             diss_weight=diss_weight)
+                    h2s += [h2]
+                    weight_id += 1
+
+                runtime = str(int((round(time.time() * 1000)) - start_time) / 1000)
+                print('trained %s models in %.3ss' % (model_name, runtime))
+                h2s_by_seed += [h2s]
 
     # test all models on all users for all seeds
     if len(only_these_users) > 0:
@@ -696,8 +744,8 @@ for user_col in user_cols:
             with open(result_dir + '\\log.csv', 'a', newline='') as file_out:
                 writer = csv.writer(file_out)
                 for i in range(len(diss_weights)):
-                    row = [str(train_frac), str(user_id), str(history_len), str(seed),
-                           str(com_range), str(auc_range), str(h1_acc), str(diss_weights[i])]
+                    row = [str(user_id), str(history_len), str(seed), str(com_range), str(auc_range), str(h1_acc),
+                           str(diss_weights[i])]
                     for j in range(len(models_to_test)):
                         model_name = models_to_test[j]
                         if 'hybrid' not in model_name:
@@ -711,8 +759,7 @@ for user_col in user_cols:
                 with open(result_dir + '\\hybrid_log.csv', 'a', newline='') as file_out:
                     writer = csv.writer(file_out)
                     for i in range(len(hybrid_stds)):
-                        row = [str(train_frac), str(user_id), str(history_len), str(seed),
-                               str(hybrid_stds[i])]
+                        row = [str(user_id), str(history_len), str(seed), str(hybrid_stds[i])]
                         for j in range(len(models_to_test)):
                             model_name = models_to_test[j]
                             if 'hybrid' in model_name:

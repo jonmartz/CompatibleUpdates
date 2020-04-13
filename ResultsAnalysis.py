@@ -291,8 +291,9 @@ def get_fixed_std(df_model, h1_mean_acc, users_h1_accs, weighted=False):
     return df_fixed.groupby('position').std()['y']
 
 
-def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users, user_type='users',
-                                  individual_user_id='', simple_plots=False, weighted=True, plot_std=True, alpha=0.2):
+def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users, dataset_name,
+                                  user_type='users', individual_user_id='', simple_plots=False, weighted=True,
+                                  plot_std=True, alpha=0.2, ccp_alpha=None):
     labels_dict = {
         'no hist': 'no history',
         'L0': 'old L0',
@@ -461,7 +462,10 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
             user_data = user_data.reset_index(drop=True)
             users_h1_accs[user_id] = user_data['y'][0]
 
-        stds = [get_fixed_std(groups_by_model.get_group(i), h1_acc_mean, users_h1_accs, weighted) for i in model_names]
+        if individual_user_id != '':
+            weighted = False
+        stds = [get_fixed_std(groups_by_model.get_group(i), h1_acc_mean, users_h1_accs, weighted)
+                for i in model_names]
         for i in range(len(models_x)):
             if model_names[i] == 'baseline':
                 continue
@@ -471,10 +475,12 @@ def plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_
             plt.fill_between(x, y + std, y - std, facecolor=colors[i], alpha=alpha)
 
     if individual_user_id == '':
-        title = 'average plots for users = %s' % user_type
-        file_name = 'average_plot_%s' % user_type
+        title = 'dataset=%s users=%s' % (dataset_name, user_type)
+        if ccp_alpha is not None:
+            title += ' ccp_alpha=%s' % ccp_alpha
+        file_name = 'average_plot_%s_%s' % (dataset_name, user_type)
     else:
-        title = '%s = %s, n = %d' % (user_type, individual_user_id, size)
+        title = '%s=%s, n=%d' % (user_type, individual_user_id, size)
         file_name = 'len_%d_user_%s' % (size, individual_user_id)
     if not simple_plots:
         plt.title(title)
@@ -515,7 +521,7 @@ def correlate_baseline_with_models(log_path, results_dir):
             header += [
                 # model + ' acc',
                 model + ' delta',
-                ]
+            ]
     df_result = pd.DataFrame(columns=header)
     diss_weights = df_log['diss weight'].unique()
     for user_id, user_log in log_by_users:
@@ -557,15 +563,15 @@ def correlate_baseline_with_models(log_path, results_dir):
 
             df_result = df_result.append(df_user_seed)
 
-    df_result.to_csv(results_dir+'corr.csv', index=False)
+    df_result.to_csv(results_dir + 'corr.csv', index=False)
     baseline_delta = df_result['baseline delta']
-    with open(results_dir+'corr.txt', 'w', newline='') as file_out:
+    with open(results_dir + 'corr.txt', 'w', newline='') as file_out:
         for model in models:
             model_delta = df_result[model + ' delta']
             pearson = pearsonr(baseline_delta, model_delta)
             spearman = spearmanr(baseline_delta, model_delta)
-            file_out.write(model+': pearson='+str(pearson[0])+' p-val='+str(pearson[1])
-                           + ', spearman='+str(spearman[0])+' p-val='+str(spearman[1]) + '\n')
+            file_out.write(model + ': pearson=' + str(pearson[0]) + ' p-val=' + str(pearson[1])
+                           + ', spearman=' + str(spearman[0]) + ' p-val=' + str(spearman[1]) + '\n')
 
 
 def get_y_given_x(X, Y, x):
@@ -582,37 +588,21 @@ def get_y_given_x(X, Y, x):
     return y_left + slope * (x - x_left)
 
 
-skip_users = []
-
 # dataset_name = 'salaries'
-# version = '1'
-# user_types = ['relationship']
+# version = '0.005'
+# skip_user_types = []
 
-dataset_name = 'assistment'
-version = '1'
-# version = 'cpp tests'
-skip_user_types = ['0.0001', '0.001', '0.0005', '0.0007']
+# dataset_name = 'assistment'
+# version = 'unbalanced\\0.00001'
+# skip_user_types = []
 
-# dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\recividism\\'
-# version = '80 split [10] h1 500 h2 200 epochs\\'
-# user_types = ['race']
-# # user_types = ['race', 'sex', 'age_cat', 'c_charge_degree', 'score_text']
-
-# dataset = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\titanic\\'
-# version = '80 split [] epochs h1 500 h2 800\\'
-# user_types = ['Pclass', 'Sex', 'AgeClass', 'Embarked']
-
-# dataset_name = 'mooc'
-# version = '80 split []\\'
-# user_types = ['forum_uid']
-
-# dataset_name = 'abalone'
-# version = '80 split [5]\\'
-# user_types = ['sex']
+dataset_name = 'recividism'
+version = 'split\\0.002'
+skip_user_types = []
 
 # dataset_name = 'hospital_mortality'
-# version = '80 split []\\'
-# user_types = ['MARITAL_STATUS']
+# version = 'unbalanced\\0.001'
+# skip_user_types = []
 
 # analysis settings
 individual_users = False
@@ -627,16 +617,14 @@ opacity = 0.15
 
 dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\decision trees\\%s\\' % dataset_name
 
-# model_names = version.split('-')
-
 model_names = [
     'no hist',
     # 'L0',
     # 'L1',
     # 'L2',
-    # 'L3',
-    # 'L4',
-    # 'hybrid',
+    'L3',
+    'L4',
+    'hybrid',
     # 'full_hybrid',
     # 'baseline',
     # 'adaboost',
@@ -648,9 +636,19 @@ root = dataset_path + version
 user_types = [i for i in os.listdir(root) if os.path.isdir(os.path.join(root, i))]
 version += '\\'
 
+ccp_alpha = None
+try:
+    params = pd.read_csv('%s%sparameters.csv' % (dataset_path, version))
+    ccp_alpha = params['ccp_alpha'][0]
+except FileNotFoundError:
+    pass
+
+skip_users = []
+
 for user_type in user_types:
-    if user_type in skip_user_types + ['averaged plots']:
+    if 'averaged plots' in user_type or user_type in skip_user_types:
         continue
+    print('\nusers = %s' % user_type)
     user_type_dir = dataset_path + version + user_type + '\\'
     log_path = user_type_dir + 'log.csv'
     hybrid_log_path = user_type_dir + 'hybrid_log.csv'
@@ -664,13 +662,13 @@ for user_type in user_types:
         continue
 
     if not individual_users:
-        results_dir = dataset_path + version + 'averaged plots\\by user type'
+        results_dir = dataset_path + version + 'averaged plots'
         safe_make_dir(results_dir)
-        plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users,
+        plots_averaged_over_all_users(log_path, hybrid_log_path, results_dir, model_names, skip_users, dataset_name,
                                       user_type=user_type, simple_plots=simple_plots, weighted=weighted,
-                                      plot_std=plot_std, alpha=opacity)
+                                      plot_std=plot_std, alpha=opacity, ccp_alpha=ccp_alpha)
     else:
-        results_dir = dataset_path + version + 'averaged plots\\by user\\%s' % user_type
+        results_dir = dataset_path + version + 'averaged plots\\individual users\\%s' % user_type
         if not os.path.exists(results_dir):
             by_user_id_dir = '%s\\log_by_user\\' % user_type_dir
             safe_make_dir(by_user_id_dir)
@@ -681,5 +679,6 @@ for user_type in user_types:
             user_log_path = '%slog_by_user\\%s_log.csv' % (user_type_dir, user_id)
             user_hybrid_log_path = '%slog_by_user\\%s_hybrid_log.csv' % (user_type_dir, user_id)
             plots_averaged_over_all_users(user_log_path, user_hybrid_log_path, results_dir, model_names, skip_users,
-                                          user_type=user_type, individual_user_id=user_id, simple_plots=simple_plots,
-                                          weighted=weighted, plot_std=plot_std, alpha=opacity)
+                                          dataset_name, user_type=user_type, individual_user_id=user_id,
+                                          simple_plots=simple_plots, weighted=weighted, plot_std=plot_std,
+                                          alpha=opacity)

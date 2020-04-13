@@ -102,7 +102,7 @@ class DecisionTree:
         diss_weight = self.diss_weight
         model_name = self.model_name
         hist = self.hist
-        
+
         # getting old predictions
         old_predicted = np.round(self.old_model.predict(x))
         old_correct = np.equal(old_predicted, y).astype(int).reshape(-1)
@@ -139,10 +139,10 @@ class DecisionTree:
                 elif model_name == 'L4':  # consider dissonance of both the general and history train sets
                     sample_weight = (1 - diss_weight) + diss_weight * old_correct * (1 + hist.range)
 
-                elif model_name == 'L5':  # consider dissonance of both the general and history train sets
+                elif model_name == 'L5':  # consider diss and loss of both the general and history train sets
                     sample_weight = ((1 - diss_weight) + diss_weight * old_correct) * (1 + hist.range)
 
-        return sample_weight*10
+        return sample_weight * 10
 
     def predict(self, x):
         return self.tree.predict(x).reshape(len(x), 1)
@@ -204,3 +204,33 @@ class DecisionTree:
         compatibility = np.sum(old_correct * hybrid_correct) / np.sum(old_correct)
 
         return {'compatibility': compatibility, 'auc': accuracy, 'predicted': predicted}
+
+
+class ParametrizedTree(DecisionTree):
+
+    def __init__(self, x_train, y_train, model_name, ccp_alpha, general_loss, general_diss, hist_loss, hist_diss,
+                 x_test=None, y_test=None, max_depth=None, old_model=None, diss_weight=None, hist=None):
+        self.general_loss = general_loss
+        self.general_diss = general_diss
+        self.hist_loss = hist_loss
+        self.hist_diss = hist_diss
+        model_name = '%.4f %.4f %.4f %.4f' % (general_loss, general_diss, hist_loss, hist_diss)
+        super().__init__(x_train, y_train, model_name, ccp_alpha, x_test, y_test, max_depth, old_model, diss_weight,
+                         hist)
+
+    def get_sample_weight(self, x, y):
+        diss_w = self.diss_weight
+        hist_range = self.hist.range
+        general_loss = self.general_loss
+        general_diss = self.general_diss
+        hist_loss = self.hist_loss
+        hist_diss = self.hist_diss
+
+        # getting old predictions
+        old_predicted = np.round(self.old_model.predict(x))
+        old_correct = np.equal(old_predicted, y).astype(int).reshape(-1)
+
+        sample_weight = (1 - diss_w) * (general_loss + hist_loss * hist_range) \
+                        + diss_w * old_correct * (general_diss + hist_diss * hist_range)
+
+        return sample_weight * 10
