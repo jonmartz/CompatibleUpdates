@@ -588,6 +588,51 @@ def get_y_given_x(X, Y, x):
     return y_left + slope * (x - x_left)
 
 
+def sim_ann_plot(log_path, result_path, bin_size=20):
+
+    # df = pd.read_csv(log_path)
+    # x = df['iteration']
+    # ys = ['general_loss', 'general_diss', 'hist_loss', 'hist_diss']
+    # for param in ys:
+    #     plt.plot(x, df[param], label=param)
+    # plt.plot(x, df['AUTC'], 'k--', label='AUTC')
+    # plt.xlabel('iteration')
+    # plt.ylabel('value')
+    # plt.legend()
+    # plt.title('Simulated annealing experiment')
+    # plt.savefig('%s\\sim_ann_plot.png' % result_path)
+    # plt.show()
+
+    df = pd.read_csv(log_path)
+    x = df['iteration'].to_numpy()
+    n = int(len(x) / bin_size) * bin_size
+    x = x[:n][0::bin_size]
+    params = ['general_loss', 'general_diss', 'hist_loss', 'hist_diss']
+
+    autc = np.maximum(0, df['AUTC'].to_numpy())[:n]
+    autc = np.mean(autc.reshape(-1, bin_size), axis=1)
+
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    ax2.set_ylabel('AUTC', color='grey')
+    ax2.plot(x, autc, color='grey', label='AUTC', linestyle='dotted')
+    ax2.tick_params(axis='y', labelcolor='grey')
+
+    for param in params:
+        y = df[param].to_numpy()[:n]
+        y = np.mean(y.reshape(-1, bin_size), axis=1)
+        ax1.plot(x, y, label=param)
+
+    ax1.set_xlabel('iteration')
+    ax1.set_ylabel('parameter value')
+    ax1.tick_params(axis='y')
+
+    ax1.legend()
+    plt.title('Simulated annealing experiment')
+    plt.savefig('%s\\sim_ann_plot.png' % result_path)
+    plt.show()
+
+
 # dataset_name = 'salaries'
 # version = '0.005'
 # skip_user_types = []
@@ -597,7 +642,7 @@ def get_y_given_x(X, Y, x):
 # skip_user_types = []
 
 dataset_name = 'recividism'
-version = 'split\\0.002'
+version = '2'
 skip_user_types = []
 
 # dataset_name = 'hospital_mortality'
@@ -608,6 +653,7 @@ skip_user_types = []
 individual_users = False
 compute_auc = False
 correlation = False
+sim_ann = True
 
 # plot settings
 simple_plots = False
@@ -615,16 +661,16 @@ weighted = True
 plot_std = True
 opacity = 0.15
 
-dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\decision trees\\%s\\' % dataset_name
+dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing\\%s\\' % dataset_name
 
 model_names = [
     'no hist',
     # 'L0',
     # 'L1',
     # 'L2',
-    'L3',
-    'L4',
-    'hybrid',
+    # 'L3',
+    # 'L4',
+    # 'hybrid',
     # 'full_hybrid',
     # 'baseline',
     # 'adaboost',
@@ -645,11 +691,18 @@ except FileNotFoundError:
 
 skip_users = []
 
+
 for user_type in user_types:
     if 'averaged plots' in user_type or user_type in skip_user_types:
         continue
     print('\nusers = %s' % user_type)
     user_type_dir = dataset_path + version + user_type + '\\'
+
+    if sim_ann:
+        log_path = user_type_dir + 'sim_ann.csv'
+        sim_ann_plot(log_path, user_type_dir)
+        continue
+
     log_path = user_type_dir + 'log.csv'
     hybrid_log_path = user_type_dir + 'hybrid_log.csv'
 
