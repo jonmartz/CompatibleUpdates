@@ -291,36 +291,27 @@ chrono_split = False
 balance_histories = True
 sim_ann = False
 models_to_test = {  # [general_loss, general_diss, hist_loss, hist_diss]
-    'sim_ann': [6.196288604, 15.10692767, 0.249410109, 9.585362376],
-    'no hist': [1, 1, 0, 0],
-    'baseline': [1, 0, 1, 0],
-    'L0': [1, 0, 0, 1],
-    'L1': [1, 1, 0, 1],
-    'L2': [1, 1, 1, 1],
+    'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'k'},
+    'baseline': {'sample_weight': [1, 0, 1, 0], 'color': 'grey'},
+    'L0': {'sample_weight': [1, 0, 0, 1], 'color': 'r'},
+    'L1': {'sample_weight': [1, 1, 0, 1], 'color': 'b'},
+    'sim_ann': {'sample_weight': [6.196288604, 15.10692767, 0.249410109, 9.585362376], 'color': 'purple'},
+    'hybrid': {'color': 'g'},
+    # 'L2': [1, 1, 1, 1],
 }
 model_names_to_test = list(models_to_test.keys())
 if not sim_ann:  # only one iteration per model to test
     max_sim_ann_iter = len(model_names_to_test)
 
+if 'hybrid' in model_names_to_test:
+    hybrid_range = range(-weights_num, weights_num + 2, 2)
+    den = weights_num / 3
+    hybrid_weights = list((-i / den for i in hybrid_range))
+
 # default settings
 diss_weights = np.array([i / weights_num for i in range(weights_num + 1)])
 diss_weights = diss_weights * (weights_range[1] - weights_range[0]) + weights_range[0]
 print('diss_weights = %s' % diss_weights)
-# range_stds = range(-30, 30, 2)
-# hybrid_stds = list((-x / 10 for x in range_stds))
-# colors = {
-#     'no hist': 'k',
-#     'L0': 'b',
-#     'L1': 'yellow',
-#     'L2': 'purple',
-#     'L3': 'r',
-#     'L4': 'purple',
-#     'hybrid': 'g',
-#     'full_hybrid': 'c',
-#     'baseline': 'grey',
-#     'adaboost': 'blueviolet',
-#     'comp_adaboost': 'y',
-# }
 
 # skip cols
 user_cols_not_skipped = []
@@ -549,6 +540,7 @@ for user_col in user_cols:
     # for each model tested
     xs = []
     ys = []
+    autcs = []
 
     # prepare simulated annealing
     if len(only_these_users) > 0:
@@ -570,7 +562,7 @@ for user_col in user_cols:
         df_results = pd.DataFrame(columns=['user', 'len', 'seed', 'h1_acc', 'weight', 'x', 'y'])
 
         # getting candidate values
-        if autc_prev is not None:
+        if sim_ann and autc_prev is not None:
             for i in range(len(sample_weight_cand)):
                 sample_weight_cand[i] = max(0, np.random.normal(sample_weight_prev[i], sim_ann_var, 1)[0])
 
@@ -704,23 +696,37 @@ for user_col in user_cols:
                 #     print('\t%d/%d %s %ss' % (i + 1, len(models_to_test), model_name, str(runtime)))
 
                 # get trade-off plot
+                weights = diss_weights
                 if not sim_ann:  # only testing models
-                    sample_weight_cand = models_to_test[model_names_to_test[sim_ann_iter]]
+                    model_name = model_names_to_test[sim_ann_iter]
+                    if model_name == 'hybrid':
+                        weights = hybrid_weights
+                        h2_no_hist = Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
+                                                         old_model=h1, diss_weight=0)
+                        h2_no_hist.set_hybrid_test(hist, hist_test_x)
+                    else:
+                        sample_weight_cand = models_to_test[model_name]['sample_weight']
+
                 model_x, model_y = [], []
-                for j in range(len(diss_weights)):
-                    weight = diss_weights[j]
-                    h2 = Models.ParametrizedTree(X_train, Y_train, ccp_alpha, sample_weight_cand,
-                                                 old_model=h1, diss_weight=weight, hist=hist)
-                    result = h2.test(hist_test_x, hist_test_y, h1)
+                for j in range(len(weights)):
+                    weight = weights[j]
+                    if model_name == 'hybrid':
+                        result = h2_no_hist.hybrid_test(hist_test_y, weight)
+                    else:
+                        h2 = Models.ParametrizedTree(X_train, Y_train, ccp_alpha, sample_weight_cand,
+                                                     max_depth=max_depth, old_model=h1, diss_weight=weight, hist=hist)
+                        result = h2.test(hist_test_x, hist_test_y, h1)
                     model_x += [result['compatibility']]
                     model_y += [result['auc']]
+                if model_name == 'hybrid':
+                    weights = reversed(weights)
                 df_results = df_results.append(
                     pd.DataFrame({'user': user_id, 'len': hist_len, 'seed': seed, 'h1_acc': h1_acc,
-                                  'weight': diss_weights, 'x': model_x, 'y': model_y}))
+                                  'weight': weights, 'x': model_x, 'y': model_y}))
             user_idx += 1
 
         # finishing this sim_ann_iter
-        df_results.to_csv('%s\\plots\\%d.csv' % (result_dir, sim_ann_iter), index=False)
+        df_results.to_csv('%s\\logs\\%d.csv' % (result_dir, sim_ann_iter), index=False)
 
         # weighted average over all seeds of all users
         if sim_ann_iter == 0:
@@ -743,6 +749,8 @@ for user_col in user_cols:
                 x[i] = x[i - 1]
         h1_area = (x[-1] - x[0]) * h1_avg_acc
         autc_cand = auc(x, y) - h1_area
+
+        autcs.append(autc_cand)
 
         # evaluate candidate
         accepted = False
@@ -787,12 +795,21 @@ for user_col in user_cols:
     if not sim_ann:
         h1_x = [min(min(i) for i in xs), max(max(i) for i in xs)]
         h1_y = [h1_avg_acc, h1_avg_acc]
-        plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+        plt.plot(h1_x, h1_y, 'k--', marker='.', label='h1    [t_loss, t_diss, h_loss, h_diss]')
 
         for i in range(len(xs)):
             x = xs[i]
             y = ys[i]
-            plt.plot(x, y, marker='.', label=model_names_to_test[i])
+            autc = autcs[i]
+            model_name = model_names_to_test[i]
+            model = models_to_test[model_name]
+            color = model['color']
+            if model_name == 'hybrid':
+                label = 'autc=%.4f hybrid' % autc
+            else:
+                s1, s2, s3, s4 = model['sample_weight']
+                label = 'autc=%.4f [%.1f %.1f %.1f %.1f] %s' % (autc, s1, s2, s3, s4, model_name)
+            plt.plot(x, y, marker='.', label=label, color=color)
         plt.xlabel('compatibility')
         plt.ylabel('accuracy')
         plt.legend()
