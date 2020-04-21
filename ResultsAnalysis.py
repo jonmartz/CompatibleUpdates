@@ -590,19 +590,6 @@ def get_y_given_x(X, Y, x):
 
 def sim_ann_plot(log_path, result_path, bin_size=20):
 
-    # df = pd.read_csv(log_path)
-    # x = df['iteration']
-    # ys = ['general_loss', 'general_diss', 'hist_loss', 'hist_diss']
-    # for param in ys:
-    #     plt.plot(x, df[param], label=param)
-    # plt.plot(x, df['AUTC'], 'k--', label='AUTC')
-    # plt.xlabel('iteration')
-    # plt.ylabel('value')
-    # plt.legend()
-    # plt.title('Simulated annealing experiment')
-    # plt.savefig('%s\\sim_ann_plot.png' % result_path)
-    # plt.show()
-
     df = pd.read_csv(log_path)
     x = df['iteration'].to_numpy()
     n = int(len(x) / bin_size) * bin_size
