@@ -31,64 +31,70 @@ def min_and_max(x):
 
 # Data-set paths
 
-dataset_name = 'assistment'
+# dataset_name = 'assistment'
+# # data settings
+# target_col = 'correct'
+# # original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+# original_categ_cols = ['tutor_mode', 'answer_type', 'type']
+# user_cols = ['user_id']
+# skip_cols = []
+# # skip_cols = ['skill']
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.90
+# h1_len = 50
+# h2_len = 3000
+# seeds = range(30)
+# weights_num = 30
+# weights_range = [0, 1]
+# sim_ann_var = 0.05
+# max_sim_ann_iter = -1
+# iters_to_cooling = 100
+# # model settings
+# max_depth = None
+# ccp_alphas = [0.004]
+# # ccp_alphas = [i / 1000 for i in range(1, 9)]
+# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# # best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
+# best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
+# # user settings
+# min_hist_len = 300
+# max_hist_len = 100000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
+
+dataset_name = "salaries"
 # data settings
-target_col = 'correct'
-# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-original_categ_cols = ['tutor_mode', 'answer_type', 'type']
-user_cols = ['user_id']
-skip_cols = []
-# skip_cols = ['skill']
+target_col = 'salary'
+original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+                       'native-country']
+user_cols = ['relationship']
+skip_cols = ['fnlgwt', 'education', 'native-country']
 df_max_size = 100000
 # experiment settings
-train_frac = 0.90
-h1_len = 50
-h2_len = 3000
-seeds = range(100)
-weights_num = 100
+train_frac = 0.8
+h1_len = 20
+h2_len = 5000
+seeds = range(30)
+weights_num = 10
 weights_range = [0, 1]
+# sim_ann
 sim_ann_var = 0.05
 max_sim_ann_iter = -1
 iters_to_cooling = 100
 # model settings
 max_depth = None
-# ccp_alpha = 0.001
-ccp_alphas = [0.001]
-# ccp_alphas = [i / 1000 for i in range(1, 9)]
-sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
-best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
+ccp_alphas = [0.002]
+sample_weights_factor = None
+# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# best_sample_weight = []
 # user settings
-min_hist_len = 300
-max_hist_len = 100000
+min_hist_len = 50
+max_hist_len = 2000
 current_user_count = 0
 users_to_not_test_on = []
 only_these_users = []
-
-# dataset_name = "salaries"
-# # data settings
-# target_col = 'salary'
-# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-#                        'native-country']
-# user_cols = ['relationship']
-# skip_cols = ['fnlgwt']
-# df_max_size = 100000
-# # experiment settings
-# train_frac = 0.8
-# h1_len = 50
-# h2_len = 5000
-# seeds = range(30)
-# weights_num = 10
-# weights_range = [0, 1]
-# # model settings
-# max_depth = None
-# ccp_alpha = 0.002
-# # user settings
-# min_hist_len = 50
-# max_hist_len = 2000
-# current_user_count = 0
-# users_to_not_test_on = []
-# only_these_users = []
 
 # dataset_name = "recividism"
 # # data settings
@@ -272,7 +278,7 @@ skip_models = [
     [1, 0, 0, 0],
     [1, 0, 1, 0],
 ]
-cmap = plt.cm.get_cmap('Spectral')
+cmap = plt.cm.get_cmap('jet')
 models_to_test['no hist'] = {'sample_weight': [1, 1, 0, 0], 'color': cmap(0)}
 model_name = 1
 for i0 in [0, 1]:
@@ -286,7 +292,7 @@ for i0 in [0, 1]:
                 models_to_test[name] = {'sample_weight': sample_weight,
                                         'color': cmap(model_name / (16 - len(skip_models) + 2))}
                 model_name += 1
-models_to_test['sim_ann'] = {'sample_weight': best_sample_weight, 'color': cmap(1.0)}
+# models_to_test['sim_ann'] = {'sample_weight': best_sample_weight, 'color': cmap(1.0)}
 models_to_test['hybrid'] = {'color': 'green'}
 
 # default settings

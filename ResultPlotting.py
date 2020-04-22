@@ -55,7 +55,7 @@ def get_model_dict():
     return models
 
 
-def plot_results(log_dir, dataset, user_type, models, user_name='', show_tradeoff_plots=True):
+def plot_results(log_dir, dataset, user_type, models, bin_size=1, user_name='', show_tradeoff_plots=True):
 
     if user_name == '':
         df_results = pd.read_csv('%s\\log.csv' % log_dir)
@@ -69,7 +69,7 @@ def plot_results(log_dir, dataset, user_type, models, user_name='', show_tradeof
     h1_avg_acc = np.average(df_results['h1_acc'], weights=df_results['len'])
     groups_by_weight = df_results.groupby('weight')
 
-    fig, (ax, tabax) = plt.subplots(nrows=2, figsize=(6.4, 4.8 + 0.2 * len(model_names)))
+    fig, (ax, tabax) = plt.subplots(nrows=2, figsize=(6.4, 4.8 + 0.3 * len(model_names)))
     cmap = plt.cm.get_cmap('jet')
 
     for model_name in model_names:
@@ -77,8 +77,16 @@ def plot_results(log_dir, dataset, user_type, models, user_name='', show_tradeof
         dfs_by_weight = [groups_by_weight.get_group(i) for i in groups_by_weight.groups]
         x = [np.average(i['%s x' % model_name], weights=i['len']) for i in dfs_by_weight]
         y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
-        xs.append(x.copy())
-        ys.append(y)
+
+        if bin_size > 1:
+            last_idx = len(x) - ((len(x) - 2) % bin_size) - 1
+            x_binned = np.mean(np.array(x[1:last_idx]).reshape(-1, bin_size), axis=1)
+            y_binned = np.mean(np.array(y[1:last_idx]).reshape(-1, bin_size), axis=1)
+            xs.append([x[0]] + list(x_binned) + [np.mean(x[last_idx:-1]), x[-1]])
+            ys.append([y[0]] + list(y_binned) + [np.mean(y[last_idx:-1]), y[-1]])
+        else:
+            xs.append(x.copy())
+            ys.append(y)
 
         # make x monotonic for AUTC
         for i in range(1, len(x)):
@@ -147,7 +155,6 @@ def plot_results(log_dir, dataset, user_type, models, user_name='', show_tradeof
             color = 'white'
         colors.append(color)
 
-
     # table
     columns = ('gen', 'gen diss', 'hist', 'hist diss', '+ AUTC %')
     tabax.axis("off")
@@ -163,28 +170,34 @@ def plot_results(log_dir, dataset, user_type, models, user_name='', show_tradeof
     if user_name == '':
         title = 'average tradeoffs, dataset=%s user_type=%s' % (dataset, user_type)
         ax.set_title(title)
-        plt.savefig('%s\\plots.png' % log_dir, bbox_inches=0)
+        plt.savefig('%s\\plots.png' % log_dir, bbox_inches='tight')
     else:
-        title = 'dataset=%s user_type=%s user=%s' % (dataset, user_type, user_name)
+        len_h = df_results.loc[0]['len']
+        title = 'dataset=%s user=%s len(h)=%d' % (dataset, user_name, len_h)
         ax.set_title(title)
-        plt.savefig('%s\\%s.png' % (log_dir, user_name), bbox_inches=0)
+        plt.savefig('%s\\%s.png' % (log_dir, user_name), bbox_inches='tight')
     if show_tradeoff_plots:
         plt.show()
     plt.clf()
 
 
-dataset = 'assistment'
-version = 'all models'
-user_type = 'user_id'
+# dataset = 'assistment'
+# version = '100 seeds'
+# user_type = 'user_id'
+
+dataset = 'salaries'
+version = '1'
+user_type = 'relationship'
 
 individual_users = True
+bin_size = 3
 
 results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing'
 log_dir = '%s\\%s\\%s\\%s' % (results_dir, dataset, version, user_type)
 models = get_model_dict()
 
 if not individual_users:
-    plot_results(log_dir, dataset, user_type, models)
+    plot_results(log_dir, dataset, user_type, models, bin_size=bin_size)
 else:
     users_dir = '%s\\%s\\%s\\%s\\user_logs' % (results_dir, dataset, version, user_type)
     if not os.path.exists(users_dir):
@@ -192,5 +205,5 @@ else:
         split_users(log_dir)
     user_ids = pd.unique(pd.read_csv('%s\\log.csv' % log_dir)['user'])
     for user_id in user_ids:
-        plot_results('%s\\user_logs' % log_dir, dataset, user_type, models, user_id)
+        plot_results('%s\\user_logs' % log_dir, dataset, user_type, models, bin_size=bin_size, user_name=user_id)
 
