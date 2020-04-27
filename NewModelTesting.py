@@ -31,70 +31,70 @@ def min_and_max(x):
 
 # Data-set paths
 
-# dataset_name = 'assistment'
-# # data settings
-# target_col = 'correct'
-# # original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-# original_categ_cols = ['tutor_mode', 'answer_type', 'type']
-# user_cols = ['user_id']
-# skip_cols = []
-# # skip_cols = ['skill']
-# df_max_size = 100000
-# # experiment settings
-# train_frac = 0.90
-# h1_len = 50
-# h2_len = 3000
-# seeds = range(30)
-# weights_num = 30
-# weights_range = [0, 1]
-# sim_ann_var = 0.05
-# max_sim_ann_iter = -1
-# iters_to_cooling = 100
-# # model settings
-# max_depth = None
-# ccp_alphas = [0.004]
-# # ccp_alphas = [i / 1000 for i in range(1, 9)]
-# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# # best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
-# best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
-# # user settings
-# min_hist_len = 300
-# max_hist_len = 100000
-# current_user_count = 0
-# users_to_not_test_on = []
-# only_these_users = []
-
-dataset_name = "salaries"
+dataset_name = 'assistment'
 # data settings
-target_col = 'salary'
-original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-                       'native-country']
-user_cols = ['relationship']
-skip_cols = ['fnlgwt', 'education', 'native-country']
+target_col = 'correct'
+original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+user_cols = ['user_id']
+# skip_cols = []
+skip_cols = ['skill']
 df_max_size = 100000
 # experiment settings
 train_frac = 0.8
+valid_frac = 0.1
 h1_len = 20
 h2_len = 5000
-seeds = range(30)
-weights_num = 10
+seeds = range(5)
+weights_num = 50
 weights_range = [0, 1]
-# sim_ann
 sim_ann_var = 0.05
 max_sim_ann_iter = -1
 iters_to_cooling = 100
 # model settings
 max_depth = None
-ccp_alphas = [0.002]
-sample_weights_factor = None
-# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# best_sample_weight = []
+ccp_alphas = [0.004]
+# ccp_alphas = [i / 1000 for i in range(1, 11)]
+sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
+best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
 # user settings
-min_hist_len = 50
-max_hist_len = 2000
+min_hist_len = 300
+max_hist_len = 100000
 current_user_count = 0
 users_to_not_test_on = []
 only_these_users = []
+
+# dataset_name = "salaries"
+# # data settings
+# target_col = 'salary'
+# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+#                        'native-country']
+# user_cols = ['relationship']
+# skip_cols = ['fnlgwt', 'education', 'native-country']
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.8
+# h1_len = 20
+# h2_len = 5000
+# seeds = range(30)
+# weights_num = 10
+# weights_range = [0, 1]
+# # sim_ann
+# sim_ann_var = 0.05
+# max_sim_ann_iter = -1
+# iters_to_cooling = 100
+# # model settings
+# max_depth = None
+# ccp_alphas = [0.002]
+# sample_weights_factor = None
+# # sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# # best_sample_weight = []
+# # user settings
+# min_hist_len = 50
+# max_hist_len = 2000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
 
 # dataset_name = "recividism"
 # # data settings
@@ -248,7 +248,7 @@ only_these_users = []
 # experiment settings
 sim_ann = False
 chrono_split = False
-balance_histories = True
+balance_histories = False
 
 # output settings
 make_tradeoff_plots = False
@@ -256,44 +256,26 @@ show_tradeoff_plots = False
 sound_at_new_best = True
 
 # model settings
-models_to_test = {  # [general_loss, general_diss, hist_loss, hist_diss]
+models_to_test = {
     # 'no diss': {'sample_weight': [1, 0, 1, 0], 'color': 'grey'},
-    # 'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'black'},
-    # 'L0': {'sample_weight': [1, 0, 0, 1], 'color': 'red'},
-    # 'L1': {'sample_weight': [1, 1, 0, 1], 'color': 'b'},
-    # 'Lh': {'sample_weight': [0, 0, 1, 1], 'color': 'darkorange'},
-    # 'L2': {'sample_weight': [0, 1, 1, 0], 'color': 'purple'},
-    # 'L3': {'sample_weight': [0, 1, 1, 1], 'color': 'magenta'},
-    # 'sim_ann': {'sample_weight': best_sample_weight, 'color': 'saddlebrown'},
-    # 'hybrid': {'color': 'green'},
+    'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'black'},
+    # 'sim_ann': {'sample_weight': best_sample_weight, 'color': 'red'},
+    'hybrid': {'color': 'green'},
 }
-
-skip_models = [
-    [1, 1, 0, 0],  # no hist
-    [0, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 1, 0, 1],
-    [0, 0, 0, 1],
-    [0, 0, 1, 0],
-    [1, 0, 0, 0],
-    [1, 0, 1, 0],
+parametrized_models = [  # [general_loss, general_diss, hist_loss, hist_diss]
+    ['L1', [0, 0, 1, 1]],
+    ['L2', [0, 1, 1, 0]],
+    ['L3', [0, 1, 1, 1]],
+    ['L4', [1, 0, 0, 1]],
+    ['L5', [1, 0, 1, 1]],
+    ['L6', [1, 1, 0, 1]],
+    ['L7', [1, 1, 1, 0]],
+    ['L8', [1, 1, 1, 1]],
 ]
 cmap = plt.cm.get_cmap('jet')
-models_to_test['no hist'] = {'sample_weight': [1, 1, 0, 0], 'color': cmap(0)}
-model_name = 1
-for i0 in [0, 1]:
-    for i1 in [0, 1]:
-        for i2 in [0, 1]:
-            for i3 in [0, 1]:
-                name = 'L%d' % model_name
-                sample_weight = [i0, i1, i2, i3]
-                if sample_weight in skip_models:
-                    continue
-                models_to_test[name] = {'sample_weight': sample_weight,
-                                        'color': cmap(model_name / (16 - len(skip_models) + 2))}
-                model_name += 1
-# models_to_test['sim_ann'] = {'sample_weight': best_sample_weight, 'color': cmap(1.0)}
-models_to_test['hybrid'] = {'color': 'green'}
+for i in range(len(parametrized_models)):
+    model = parametrized_models[i]
+    models_to_test[model[0]] = {'sample_weight': model[1], 'color': cmap((i + 1) / (len(parametrized_models) + 2))}
 
 # default settings
 diss_weights = np.array([i / weights_num for i in range(weights_num + 1)])
@@ -321,31 +303,24 @@ for categ in original_categ_cols:
 user_cols = user_cols_not_skipped
 original_categ_cols = original_categs_not_skipped
 
-dataset_path = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\%s.csv' \
-               % (dataset_name, dataset_name)
+dataset_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s' % dataset_name
+dataset_path = '%s\\%s.csv' % (dataset_dir, dataset_name)
 
 # for ccp_alpha in ccp_alphas:
 result_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\current result'
-# result_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\current result\\ccp_alpha_%.4f' % ccp_alpha
 if os.path.exists(result_dir):
     shutil.rmtree(result_dir)
 os.makedirs(result_dir)
 with open('%s\\parameters.csv' % result_dir, 'w', newline='') as file_out:
     writer = csv.writer(file_out)
     writer.writerow(['train_frac', 'ccp_alpha', 'dataset_max_size', 'h1_len', 'h2_len', 'seeds', 'weights_num',
-                     'weights_range', 'min_hist_len', 'max_hist_len', 'chrono_split', 'balance_histories'])
+                     'weights_range', 'min_hist_len', 'max_hist_len', 'chrono_split', 'balance_histories', 'skip_cols'])
     writer.writerow([train_frac, str(ccp_alphas), df_max_size, h1_len, h2_len, len(seeds), weights_num,
-                     str(weights_range), min_hist_len, max_hist_len, chrono_split, balance_histories])
+                     str(weights_range), min_hist_len, max_hist_len, chrono_split, balance_histories, str(skip_cols)])
 
 # run whole experiment for each user column selection
 for user_col in user_cols:
     print('USER COLUMN = %s' % user_col)
-
-    categ_cols = original_categ_cols.copy()
-    try:  # dont one hot encode the user_col
-        categ_cols.remove(user_col)
-    except ValueError:
-        pass
 
     # create all folders
     result_user_type_dir = '%s\\%s' % (result_dir, user_col)
@@ -356,63 +331,88 @@ for user_col in user_cols:
             writer.writerow(['iteration', 'general_loss', 'general_diss', 'hist_loss', 'hist_diss', 'AUTC', 'accepted'])
     if make_tradeoff_plots:
         os.makedirs('%s\\plots' % result_user_type_dir)
-    # if not sim_ann:
-    #     os.makedirs('%s\\logs' % result_user_type_dir)
 
-    # load data
-    print('loading data...')
-    dataset_full = pd.read_csv(dataset_path)
-    if df_max_size > 0:
-        dataset_full = dataset_full[:df_max_size]
-    for col in skip_cols:
-        del dataset_full[col]
+    cache_dir = '%s\\caches\\%s skip_%s max_len_%d h2_%d min_hist_%d max_hist_%d chrono_%s balance_%s' % \
+                (dataset_dir, user_col, '_'.join(skip_cols), df_max_size, h2_len, min_hist_len, max_hist_len,
+                 chrono_split, balance_histories)
+    safe_make_dir(cache_dir)
 
-    # pre-processing for one hot encoding
-    col_groups_dict = {}
-    categs_unique_values = dataset_full[categ_cols].nunique()
-    i = 0
-    for col in dataset_full.columns:
-        if col in [user_col, target_col]:
-            continue
-        unique_count = 1
-        if col in categ_cols:
-            unique_count = categs_unique_values[col]
-        col_groups_dict[col] = range(i, i + unique_count)
-        i = i + unique_count
-
-    # one hot encoding
-    print('one-hot encoding the data... ')
-    dataset_full = ce.OneHotEncoder(cols=categ_cols, use_cat_names=True).fit_transform(dataset_full)
-    print('num features = %d' % (dataset_full.shape[1] - 2))  # minus user and target cols
-
-    # splitting histories
-    print('balancing and sorting histories...')
-    groups_by_user = dataset_full.groupby(user_col, sort=False)
-    dataset_full = dataset_full.drop(columns=[user_col])
-    all_columns = list(dataset_full.columns)
-    all_dtypes = list(dataset_full.dtypes)
-    del dataset_full
-
-    # get user histories
-    sorted_hists = []
+    all_seeds_in_cache = True
     for seed in seeds:
-        # print('\tseed %d' % seed)
-        hists = {}
-        for user_id in groups_by_user.groups.keys():
-            hist = groups_by_user.get_group(user_id).drop(columns=[user_col])
-            if len(hist) < min_hist_len:
+        if not os.path.exists('%s\\%d.csv' % (cache_dir, seed)):
+            all_seeds_in_cache = False
+            break
+
+    if not all_seeds_in_cache:
+        categ_cols = original_categ_cols.copy()
+        try:  # dont one hot encode the user_col
+            categ_cols.remove(user_col)
+        except ValueError:
+            pass
+
+        # load data
+        print('loading data...')
+        dataset_full = pd.read_csv(dataset_path)
+        if df_max_size > 0:
+            dataset_full = dataset_full[:df_max_size]
+        for col in skip_cols:
+            del dataset_full[col]
+
+        # pre-processing for one hot encoding
+        col_groups_dict = {}
+        categs_unique_values = dataset_full[categ_cols].nunique()
+        i = 0
+        for col in dataset_full.columns:
+            if col in [user_col, target_col]:
                 continue
-            if balance_histories:
-                target_groups = hist.groupby(target_col)
-                if len(target_groups) == 1:  # only one target label present in history: skip
-                    continue
-                hist = target_groups.apply(lambda x: x.sample(target_groups.size().min(), random_state=seed))
-                hist.index = hist.index.droplevel(0)
-            hists[user_id] = hist
-        # sort hists by len in descending order
-        sorted_hists += [[[k, v] for k, v in reversed(sorted(hists.items(), key=lambda n: len(n[1])))]]
-    del groups_by_user
-    del hists
+            unique_count = 1
+            if col in categ_cols:
+                unique_count = categs_unique_values[col]
+            col_groups_dict[col] = range(i, i + unique_count)
+            i = i + unique_count
+
+        # one hot encoding
+        print('one-hot encoding the data... ')
+        dataset_full = ce.OneHotEncoder(cols=categ_cols, use_cat_names=True).fit_transform(dataset_full)
+        print('num features = %d' % (dataset_full.shape[1] - 2))  # minus user and target cols
+
+        # splitting histories
+        print('balancing and sorting histories...')
+        groups_by_user = dataset_full.groupby(user_col, sort=False)
+        dataset_full = dataset_full.drop(columns=[user_col])
+        all_columns = list(dataset_full.columns)
+        if not os.path.exists('%s\\all_columns.csv' % cache_dir):
+            pd.DataFrame(columns=all_columns).to_csv('%s\\all_columns.csv' % cache_dir, index=False)
+
+        del dataset_full
+
+        # get user histories
+        # sorted_hists = []
+        for seed in seeds:
+            if not os.path.exists('%s\\%d.csv' % (cache_dir, seed)):
+                hists = {}
+                for user_id in groups_by_user.groups.keys():
+                    hist = groups_by_user.get_group(user_id).drop(columns=[user_col])
+                    if len(hist) < min_hist_len:
+                        continue
+                    if balance_histories:
+                        target_groups = hist.groupby(target_col)
+                        if len(target_groups) == 1:  # only one target label present in history: skip
+                            continue
+                        hist = target_groups.apply(lambda x: x.sample(target_groups.size().min(), random_state=seed))
+                        hist.index = hist.index.droplevel(0)
+                    hists[user_id] = hist
+                # sort hists by len in descending order
+                # sorted_hists += [[[k, v] for k, v in reversed(sorted(hists.items(), key=lambda n: len(n[1])))]]
+                sorted_hists = [[k, v] for k, v in reversed(sorted(hists.items(), key=lambda n: len(n[1])))]
+                seed_df = pd.DataFrame(columns=[user_col] + all_columns, dtype=np.int64)
+                for user_id, hist in sorted_hists:
+                    hist[user_col] = [user_id] * len(hist)
+                    seed_df = seed_df.append(hist)
+                seed_df.to_csv('%s\\%d.csv' % (cache_dir, seed), index=False)
+        del groups_by_user
+        del hists
+    # end of making seed caches
 
     # lists indexed by seed containing dicts:
     hist_train_ranges_by_seed = []
@@ -420,11 +420,12 @@ for user_col in user_cols:
     hist_valids_by_seed = []
     hist_tests_by_seed = []
     h2_train_by_seed = []
-    # h2_test_by_seed = []
 
     print('splitting histories and composing the general train sets...')
     user_ids = []
-    min_and_max_feature_values = pd.DataFrame(columns=all_columns, dtype=np.int64)
+    # min_and_max_feature_values = pd.DataFrame(columns=all_columns, dtype=np.int64)
+    min_and_max_feature_values = pd.read_csv('%s\\all_columns.csv' % cache_dir, dtype=np.int64)
+    all_columns = min_and_max_feature_values.columns
     for seed in seeds:
         # take longest n histories such that train_frac * sum of lens <= h2 train size
         hist_train_ranges = {}
@@ -432,10 +433,12 @@ for user_col in user_cols:
         hist_valids = {}
         hist_tests = {}
         h2_train = pd.DataFrame(columns=all_columns, dtype=np.int64)
-        # h2_test = pd.DataFrame(columns=all_columns, dtype=np.int64)
-        total_len = 0
         users_checked = 0
-        for user_id, hist in sorted_hists[seed]:
+        # for user_id, hist in sorted_hists[seed]:  # [seed_0=[[u_0,h_0],...,[u_m,h_m]],...,seed_n=[...]]
+        df_seed = pd.read_csv('%s\\%d.csv' % (cache_dir, seed))
+        groups_by_user = df_seed.groupby(user_col, sort=False)
+        for user_id in groups_by_user.groups.keys():
+            hist = groups_by_user.get_group(user_id).drop(columns=[user_col])
             users_checked += 1
 
             # attempt to add user hist
@@ -448,23 +451,19 @@ for user_col in user_cols:
                     hist = hist.sample(n=max_hist_len, random_state=seed)
                 hist_len = max_hist_len
 
-            if min_hist_len <= hist_len and train_frac * (total_len + hist_len) <= h2_len:
+            if min_hist_len <= hist_len * train_frac and len(h2_train) + hist_len * train_frac <= h2_len:
 
-                # splitting train and test sets
-                hist_train_len = int(hist_len * train_frac) + 1
+                # splitting train, validation and test sets
+                hist_train_and_valid_len = int(hist_len * (train_frac + valid_frac)) + 1
+                hist_valid_len = int(hist_len * valid_frac) + 1
                 if chrono_split:
-                    hist_train = hist[:hist_train_len]
+                    hist_train_and_valid = hist[:hist_train_and_valid_len]
+                    hist_valid = hist_train_and_valid[hist_train_and_valid_len - hist_valid_len:]
                 else:
-                    hist_train = hist.sample(n=hist_train_len, random_state=seed)
-                hist_test = hist.drop(hist_train.index)
-
-                # splitting validation set
-                hist_valid_len = int(hist_len * (1 - train_frac)) + 1
-                if chrono_split:
-                    hist_valid = hist_train[:hist_valid_len]
-                else:
-                    hist_valid = hist_train.sample(n=hist_valid_len, random_state=seed)
-                hist_train = hist_train.drop(hist_valid.index)
+                    hist_train_and_valid = hist.sample(n=hist_train_and_valid_len, random_state=seed)
+                    hist_valid = hist_train_and_valid.sample(n=hist_valid_len, random_state=seed)
+                hist_train = hist_train_and_valid.drop(hist_valid.index)
+                hist_test = hist.drop(hist_train_and_valid.index)
 
                 # add user hist
                 if seed == seeds[0]:  # dont add user id more than once
@@ -474,23 +473,18 @@ for user_col in user_cols:
                 hist_trains[user_id] = hist_train.reset_index(drop=True)
                 hist_valids[user_id] = hist_valid.reset_index(drop=True)
                 hist_tests[user_id] = hist_test.reset_index(drop=True)
-                total_len += hist_len
-                h2_train = h2_train.append(hist_train)
-                # h2_test = h2_test.append(hist_test)
-                min_and_max_feature_values = min_and_max_feature_values.append(hist.apply(min_and_max))
+                h2_train = h2_train.append(hist_train, sort=True)
+                min_and_max_feature_values = min_and_max_feature_values.append(hist.apply(min_and_max), sort=True)
 
-                if train_frac * (total_len + min_hist_len) > h2_len:  # cannot add more users
+                if len(h2_train) + min_hist_len * train_frac > h2_len:  # cannot add more users
                     break
-        # print('\tseed %d users checked = %d' % (seed, users_checked))
-
         hist_train_ranges_by_seed += [hist_train_ranges]
         hist_trains_by_seed += [hist_trains]
         hist_valids_by_seed += [hist_valids]
         hist_tests_by_seed += [hist_tests]
         h2_train_by_seed += [h2_train.reset_index(drop=True)]
-        # h2_test_by_seed += [h2_test.reset_index(drop=True)]
 
-    del sorted_hists
+    # del sorted_hists
     print('users = ' + str(len(user_ids)) + ', h2 train len = ' + str(len(h2_train)))
 
     # fit scaler
@@ -506,6 +500,9 @@ for user_col in user_cols:
     h1_by_seed = []
     X_train_by_seed = []
     Y_train_by_seed = []
+    no_hists_by_seed = None
+    if not sim_ann and 'no hist' in model_names_to_test:
+        no_hists_by_seed = []
     # X_test_by_seed = []
     # Y_test_by_seed = []
 
@@ -513,7 +510,7 @@ for user_col in user_cols:
     for ccp_alpha in ccp_alphas:
         ccp_alpha_idx += 1
 
-        # print('training h1s...')
+        # print('training h1s and no_hists...')
         for seed_idx in range(len(seeds)):
             seed = seeds[seed_idx]
 
@@ -534,8 +531,18 @@ for user_col in user_cols:
             h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, max_depth=max_depth)
             h1_by_seed += [h1]
 
+            if no_hists_by_seed is not None:
+                # train no hists
+                no_hists = []
+                for weight in diss_weights:
+                    no_hist = Models.ParametrizedTree(X_train, Y_train, ccp_alpha, [1, 1, 0, 0], max_depth=max_depth,
+                                                      old_model=h1, diss_weight=weight)
+                    no_hists.append(no_hist)
+                no_hists_by_seed += [no_hists]
+
         # lists to compute things only once
-        h1_acc_by_user_seed = []
+        h1_acc_valid_by_user_seed = []
+        h1_acc_test_by_user_seed = []
         hist_len_by_user_seed = []
         hist_by_user_seed = []
         hist_train_x_by_user_seed = []
@@ -567,7 +574,8 @@ for user_col in user_cols:
         first_sim_ann_iter = True
 
         if not sim_ann:
-            df_results = pd.DataFrame(columns=['user', 'len', 'seed', 'h1_acc', 'weight'])
+            valid_results = pd.DataFrame(columns=['user', 'len', 'seed', 'h1_acc', 'weight'])
+            test_results = pd.DataFrame(columns=['user', 'len', 'seed', 'h1_acc', 'weight'])
 
         # start simulated annealing
         if sim_ann:
@@ -576,11 +584,11 @@ for user_col in user_cols:
         else:
             print('\n%d/%d cpp_alpha = %.4f' % (ccp_alpha_idx, len(ccp_alphas), ccp_alpha))
 
-        while not sim_ann_done:  # if not sim_ann (therefore testing models), this loop goes model by model
+        while not sim_ann_done:  # if not sim_ann (therefore validing models), this loop goes model by model
             start_time = int(round(time.time() * 1000))
 
-            # df_model_results = pd.DataFrame(columns=['user', 'len', 'seed', 'h1_acc', 'weight', 'x', 'y'])
-            df_model_results = pd.DataFrame(columns=['len', 'h1_acc', 'weight', 'x', 'y'])
+            model_valid_results = pd.DataFrame(columns=['len', 'h1_acc', 'weight', 'x', 'y'])
+            model_test_results = pd.DataFrame(columns=['len', 'h1_acc', 'weight', 'x', 'y'])
 
             # getting candidate values
             if sim_ann and not first_sim_ann_iter:
@@ -612,7 +620,8 @@ for user_col in user_cols:
                     hist_valid_y_by_seed = []
                     hist_test_x_by_seed = []
                     hist_test_y_by_seed = []
-                    h1_acc_by_seed = []
+                    h1_acc_by_valid_seed = []
+                    h1_acc_by_test_seed = []
 
                     # save lists for this user
                     hist_len_by_user_seed.append(hist_len_by_seed)
@@ -623,7 +632,8 @@ for user_col in user_cols:
                     hist_valid_y_by_user_seed.append(hist_valid_y_by_seed)
                     hist_test_x_by_user_seed.append(hist_test_x_by_seed)
                     hist_test_y_by_user_seed.append(hist_test_y_by_seed)
-                    h1_acc_by_user_seed.append(h1_acc_by_seed)
+                    h1_acc_valid_by_user_seed.append(h1_acc_by_valid_seed)
+                    h1_acc_test_by_user_seed.append(h1_acc_by_test_seed)
 
                 for seed_idx in range(len(seeds)):
                     iteration += 1
@@ -633,6 +643,8 @@ for user_col in user_cols:
                     X_train = X_train_by_seed[seed_idx]
                     Y_train = Y_train_by_seed[seed_idx]
                     h1 = h1_by_seed[seed_idx]
+                    if no_hists_by_seed is not None:
+                        no_hists = no_hists_by_seed[seed_idx]
 
                     # this if else is to avoid computing things more than once
                     if first_sim_ann_iter:
@@ -641,11 +653,11 @@ for user_col in user_cols:
                         hist_train = hist_trains_by_seed[seed_idx][user_id]
                         hist_valid = hist_valids_by_seed[seed_idx][user_id]
                         hist_test = hist_tests_by_seed[seed_idx][user_id]
-                        # X_test = X_test_by_seed[seed_idx]
-                        # Y_test = Y_test_by_seed[seed_idx]
+                        # X_valid = X_valid_by_seed[seed_idx]
+                        # Y_valid = Y_valid_by_seed[seed_idx]
                         hist_train_x = scaler.transform(hist_train.drop(columns=[target_col]))
                         hist_train_y = labelizer.transform(hist_train[[target_col]])
-                        hist_len = len(hist_test) + len(hist_train) + len(hist_valid)
+                        hist_len = len(hist_valid) + len(hist_train) + len(hist_test)
                         hist = Models.History(hist_train_x, hist_train_y)
                         hist.set_range(hist_train_range, len(Y_train))
                         hist_len_by_seed.append(hist_len)
@@ -653,92 +665,111 @@ for user_col in user_cols:
                         hist_train_x_by_seed.append(hist_train_x)
                         hist_train_y_by_seed.append(hist_train_y)
 
-                        if sim_ann:
-                            hist_valid_x = scaler.transform(hist_valid.drop(columns=[target_col]))
-                            hist_valid_y = labelizer.transform(hist_valid[[target_col]])
-                            hist_valid_x_by_seed.append(hist_valid_x)
-                            hist_valid_y_by_seed.append(hist_valid_y)
-                            h1_acc = h1.test(hist_valid_x, hist_valid_y)['auc']
-                        else:
-                            hist_test_x = scaler.transform(hist_test.drop(columns=[target_col]))
-                            hist_test_y = labelizer.transform(hist_test[[target_col]])
-                            hist_test_x_by_seed.append(hist_test_x)
-                            hist_test_y_by_seed.append(hist_test_y)
-                            h1_acc = h1.test(hist_test_x, hist_test_y)['auc']
-                        h1_acc_by_seed.append(h1_acc)
+                        # valid set
+                        hist_valid_x = scaler.transform(hist_valid.drop(columns=[target_col]))
+                        hist_valid_y = labelizer.transform(hist_valid[[target_col]])
+                        hist_valid_x_by_seed.append(hist_valid_x)
+                        hist_valid_y_by_seed.append(hist_valid_y)
+
+                        # testation set
+                        hist_test_x = scaler.transform(hist_test.drop(columns=[target_col]))
+                        hist_test_y = labelizer.transform(hist_test[[target_col]])
+                        hist_test_x_by_seed.append(hist_test_x)
+                        hist_test_y_by_seed.append(hist_test_y)
+
+                        h1_acc_valid = h1.test(hist_valid_x, hist_valid_y)['auc']
+                        h1_acc_test = h1.test(hist_test_x, hist_test_y)['auc']
+                        h1_acc_by_valid_seed.append(h1_acc_valid)
+                        h1_acc_by_test_seed.append(h1_acc_test)
 
                     else:
                         hist_len = hist_len_by_user_seed[user_idx][seed_idx]
                         hist = hist_by_user_seed[user_idx][seed_idx]
-                        # hist_train_x = hist_train_x_by_user_seed[user_idx][seed_idx]
-                        # hist_train_y = hist_train_y_by_user_seed[user_idx][seed_idx]
-                        if sim_ann:
-                            hist_valid_x = hist_valid_x_by_user_seed[user_idx][seed_idx]
-                            hist_valid_y = hist_valid_y_by_user_seed[user_idx][seed_idx]
-                        else:
-                            hist_test_x = hist_test_x_by_user_seed[user_idx][seed_idx]
-                            hist_test_y = hist_test_y_by_user_seed[user_idx][seed_idx]
-                        h1_acc = h1_acc_by_user_seed[user_idx][seed_idx]
-
-                    # select set to test on
-                    if sim_ann:
-                        x_test = hist_valid_x
-                        y_test = hist_valid_y
-                    else:
-                        x_test = hist_test_x
-                        y_test = hist_test_y
+                        hist_valid_x = hist_valid_x_by_user_seed[user_idx][seed_idx]
+                        hist_valid_y = hist_valid_y_by_user_seed[user_idx][seed_idx]
+                        hist_test_x = hist_test_x_by_user_seed[user_idx][seed_idx]
+                        hist_test_y = hist_test_y_by_user_seed[user_idx][seed_idx]
+                        h1_acc_test = h1_acc_test_by_user_seed[user_idx][seed_idx]
+                        h1_acc_valid = h1_acc_valid_by_user_seed[user_idx][seed_idx]
 
                     # get trade-off
                     weights = diss_weights
-                    if not sim_ann:  # only testing models
+                    if not sim_ann:  # only validing models
                         model_name = model_names_to_test[sim_ann_iter]
                         if model_name == 'hybrid':
                             weights = hybrid_weights
-                            h2_no_hist = Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
-                                                             old_model=h1, diss_weight=0)
-                            h2_no_hist.set_hybrid_test(hist, x_test)
+                            if no_hists_by_seed is not None:
+                                h2_no_hist_valid = no_hists[0]
+                            else:
+                                h2_no_hist_valid = Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha,
+                                                                       max_depth=max_depth, old_model=h1, diss_weight=0)
+                            # todo: copied cached no hists
+                            h2_no_hist_valid.set_hybrid_test(hist, hist_valid_x)
+                            h2_no_hist_test = Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha,
+                                                                  max_depth=max_depth, old_model=h1, diss_weight=0)
+                            h2_no_hist_test.set_hybrid_test(hist, hist_test_x)
                         else:
                             sample_weight_cand = models_to_test[model_name]['sample_weight']
 
-                    model_x, model_y = [], []
-                    for j in range(len(weights)):
-                        weight = weights[j]
+                    x_valid_results, y_valid_results, x_test_results, y_test_results = [], [], [], []
+                    for weight_idx in range(len(weights)):
+                        weight = weights[weight_idx]
                         if not sim_ann and model_name == 'hybrid':
-                            result = h2_no_hist.hybrid_test(y_test, weight)
+                            valid_result = h2_no_hist_valid.hybrid_test(hist_valid_y, weight)
+                            test_result = h2_no_hist_test.hybrid_test(hist_test_y, weight)
                         else:
-                            h2 = Models.ParametrizedTree(X_train, Y_train, ccp_alpha, sample_weight_cand,
-                                                         max_depth=max_depth, old_model=h1, diss_weight=weight,
-                                                         hist=hist)
-                            result = h2.test(x_test, y_test, h1)
-                        model_x += [result['compatibility']]
-                        model_y += [result['auc']]
+                            if no_hists_by_seed is not None and model_name == 'no hist':
+                                h2 = no_hists[weight_idx]
+                            else:
+                                h2 = Models.ParametrizedTree(X_train, Y_train, ccp_alpha, sample_weight_cand,
+                                                             max_depth=max_depth, old_model=h1, diss_weight=weight,
+                                                             hist=hist)
+                            valid_result = h2.test(hist_valid_x, hist_valid_y, h1)
+                            if not sim_ann:
+                                test_result = h2.test(hist_test_x, hist_test_y, h1)
+                        x_valid_results += [valid_result['compatibility']]
+                        y_valid_results += [valid_result['auc']]
+                        if not sim_ann:
+                            x_test_results += [test_result['compatibility']]
+                            y_test_results += [test_result['auc']]
                     if not sim_ann and model_name == 'hybrid':
-                        weights = reversed(weights)
+                        weights = list(reversed(weights))
 
-                    df_seed = pd.DataFrame({'len': hist_len, 'h1_acc': h1_acc, 'weight': weights,
-                                            'x': model_x, 'y': model_y})
-                    df_model_results = df_model_results.append(df_seed)
-
-                    if not sim_ann and first_sim_ann_iter:  # prepare general log
-                        df_seed = pd.DataFrame({'user': user_id, 'len': hist_len, 'seed': seed,
-                                                'h1_acc': h1_acc, 'weight': weights})
-                        df_results = df_results.append(df_seed)
+                    seed_valid_results = pd.DataFrame({'len': hist_len, 'h1_acc': h1_acc_valid, 'weight': weights,
+                                                       'x': x_valid_results, 'y': y_valid_results})
+                    model_valid_results = model_valid_results.append(seed_valid_results)
+                    if not sim_ann:
+                        try:
+                            seed_test_results = pd.DataFrame({'len': hist_len, 'h1_acc': h1_acc_test, 'weight': weights,
+                                                              'x': x_test_results, 'y': y_test_results})
+                        except ValueError:
+                            print('hi')
+                        model_test_results = model_test_results.append(seed_test_results)
+                        if first_sim_ann_iter:  # prepare general log
+                            seed_valid_results = pd.DataFrame({'user': user_id, 'len': hist_len, 'seed': seed,
+                                                               'h1_acc': h1_acc_valid, 'weight': weights})
+                            seed_test_results = pd.DataFrame({'user': user_id, 'len': hist_len, 'seed': seed,
+                                                              'h1_acc': h1_acc_test, 'weight': weights})
+                            valid_results = valid_results.append(seed_valid_results)
+                            test_results = test_results.append(seed_test_results)
 
                 # finished with user
                 user_idx += 1
 
             # finishing this sim_ann_iter
             if not sim_ann:
-                df_results['%s x' % model_name] = df_model_results['x']
-                df_results['%s y' % model_name] = df_model_results['y']
+                valid_results['%s x' % model_name] = model_valid_results['x']
+                valid_results['%s y' % model_name] = model_valid_results['y']
+                test_results['%s x' % model_name] = model_test_results['x']
+                test_results['%s y' % model_name] = model_test_results['y']
 
             # weighted average over all seeds of all users
             if first_sim_ann_iter:
-                h1_avg_acc = np.average(df_model_results['h1_acc'], weights=df_model_results['len'])
+                h1_avg_acc = np.average(model_valid_results['h1_acc'], weights=model_valid_results['len'])
 
             sim_ann_iter += 1
 
-            groups = df_model_results.groupby('weight')
+            groups = model_valid_results.groupby('weight')
             dfs_by_weight = [groups.get_group(i) for i in groups.groups]
             x = [np.average(i['x'], weights=i['len']) for i in dfs_by_weight]
             y = [np.average(i['y'], weights=i['len']) for i in dfs_by_weight]
@@ -747,7 +778,7 @@ for user_col in user_cols:
             if not sim_ann:
                 xs.append(x.copy())
                 ys.append(y)
-                if model_name != 'baseline':
+                if model_name != 'no diss':
                     xs_no_baseline.append(x.copy())
 
             # make x monotonic for AUTC
@@ -840,7 +871,7 @@ for user_col in user_cols:
                 if accepted and temperature > 0:
                     temperature = max(0, temperature - temperature_delta)
 
-            else:  # model testing
+            else:  # model validing
                 print('%d\tmodel=%s autc=%.5f time=%.1fs' %
                       (sim_ann_iter, model_name, autc_cand, runtime))
 
@@ -849,10 +880,11 @@ for user_col in user_cols:
 
             first_sim_ann_iter = False
 
-        # plot results from model testing
+        # plot results from model validing
         if not sim_ann:
 
-            df_results.to_csv('%s\\log.csv' % result_user_type_dir, index=False)
+            valid_results.to_csv('%s\\valid_log.csv' % result_user_type_dir, index=False)
+            test_results.to_csv('%s\\test_log.csv' % result_user_type_dir, index=False)
 
             min_x = min(min(i) for i in xs_no_baseline)  # baseline usually goes backward in compatibility
             h1_x = [f(f(i) for i in xs) for f in [min, max]]  # but still want the plot to look nice
@@ -884,7 +916,7 @@ for user_col in user_cols:
                 color = model['color']
                 if model_name == 'hybrid':
                     label = '                           %s%.1f%% autc (hybrid)' % (best_sign, autc_best_improv)
-                elif model_name == 'baseline':
+                elif model_name == 'no diss':
                     s1, s2, s3, s4 = model['sample_weight']
                     label = '[%.1f %.1f %.1f %.1f] (%s)' % (s1, s2, s3, s4, model_name)
                 else:
@@ -895,7 +927,7 @@ for user_col in user_cols:
             plt.xlabel('compatibility')
             plt.ylabel('accuracy')
             plt.legend(loc='lower left')
-            title = 'testing models, dataset=%s, cpp_alpha=%s' % (dataset_name, ccp_alpha)
+            title = 'validing models, dataset=%s, cpp_alpha=%s' % (dataset_name, ccp_alpha)
             plt.title(title)
             plt.savefig('%s\\cpp_alpha_%.5f.png' % (result_user_type_dir, ccp_alpha))
             # if show_tradeoff_plots:

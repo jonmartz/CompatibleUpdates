@@ -11,8 +11,8 @@ def safe_make_dir(path):
         os.makedirs(path)
 
 
-def split_users(log_dir):
-    df_log = pd.read_csv('%s\\log.csv' % log_dir)
+def split_users(log_dir, log_set):
+    df_log = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
     log_by_users = df_log.groupby('user')
 
     for user_id, user_data in log_by_users:
@@ -20,51 +20,43 @@ def split_users(log_dir):
         for row in user_data['seed']:
             mod_user_id += [str(user_id) + '_' + str(row)]
         user_data['user'] = mod_user_id
-        user_data.to_csv('%s\\user_logs\\%s.csv' % (log_dir, user_id), index=False)
+        user_data.to_csv('%s\\%s_user_logs\\%s_%s.csv' % (log_dir, log_set, log_set, user_id), index=False)
 
 
-def get_model_dict():
-    models = {}
-    skip_models = [
-        [1, 1, 0, 0],  # no hist
-        [0, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 1, 0, 1],
-        [0, 0, 0, 1],
-        [0, 0, 1, 0],
-        [1, 0, 0, 0],
-        [1, 0, 1, 0],
+def get_model_dict(cmap_name):
+    models = {
+        'no diss': {'sample_weight': [1, 0, 1, 0], 'color': 'grey'},
+        'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'black'},
+        # 'sim_ann': {'sample_weight': [0.0, 0.6352, 0.3119, 0.0780], 'color': 'purple'},
+        'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'red'},
+    }
+    parametrized_models = [  # [general_loss, general_diss, hist_loss, hist_diss]
+        ['L1', [0, 0, 1, 1]],
+        ['L2', [0, 1, 1, 0]],
+        ['L3', [0, 1, 1, 1]],
+        ['L4', [1, 0, 0, 1]],
+        ['L5', [1, 0, 1, 1]],
+        ['L6', [1, 1, 0, 1]],
+        ['L7', [1, 1, 1, 0]],
+        ['L8', [1, 1, 1, 1]],
     ]
-    cmap = plt.cm.get_cmap('jet')
-    models['no hist'] = {'sample_weight': [1, 1, 0, 0], 'color': 'black'}
-    model_name = 1
-    for i0 in [0, 1]:
-        for i1 in [0, 1]:
-            for i2 in [0, 1]:
-                for i3 in [0, 1]:
-                    name = 'L%d' % model_name
-                    sample_weight = [i0, i1, i2, i3]
-                    if sample_weight in skip_models:
-                        continue
-                    models[name] = {'sample_weight': sample_weight,
-                                    'color': cmap(model_name / (16 - len(skip_models) + 2))}
-                    model_name += 1
-    best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
-    models['sim_ann'] = {'sample_weight': best_sample_weight, 'color': cmap(1.0)}
-    models['hybrid'] = {'sample_weight': ['', '', '', ''], 'color': 'green'}
+    cmap = plt.cm.get_cmap(cmap_name)
+    for i in range(len(parametrized_models)):
+        model = parametrized_models[i]
+        models[model[0]] = {'sample_weight': model[1], 'color': cmap((i + 1) / (len(parametrized_models) + 3))}
     return models
 
 
-def plot_results(log_dir, dataset, user_type, models, bin_size=1, user_name='', show_tradeoff_plots=True):
+def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_name='', show_tradeoff_plots=True,
+                 smooth_color_progression=False):
 
     if user_name == '':
-        df_results = pd.read_csv('%s\\log.csv' % log_dir)
+        df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
     else:
-        df_results = pd.read_csv('%s\\%s.csv' % (log_dir, user_name))
+        df_results = pd.read_csv('%s\\%s_%s.csv' % (log_dir, log_set, user_name))
 
     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
-    xs = []
-    ys = []
+    xs, ys, xs_plot, ys_plot = [], [], [], []
     autcs = []
     h1_avg_acc = np.average(df_results['h1_acc'], weights=df_results['len'])
     groups_by_weight = df_results.groupby('weight')
@@ -78,26 +70,28 @@ def plot_results(log_dir, dataset, user_type, models, bin_size=1, user_name='', 
         x = [np.average(i['%s x' % model_name], weights=i['len']) for i in dfs_by_weight]
         y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
 
+        # make x monotonic for AUTC
+        x_copy = x.copy()
+        for i in range(1, len(x_copy)):
+            if x_copy[i] < x_copy[i - 1]:
+                x_copy[i] = x_copy[i - 1]
+        h1_area = (x_copy[-1] - x_copy[0]) * h1_avg_acc
+        autc = auc(x_copy, y) - h1_area
+        autcs.append(autc)
+        if model_name == 'no hist':
+            no_hist_autc = autc
+
+        xs.append(x)
+        ys.append(y)
         if bin_size > 1:
             last_idx = len(x) - ((len(x) - 2) % bin_size) - 1
             x_binned = np.mean(np.array(x[1:last_idx]).reshape(-1, bin_size), axis=1)
             y_binned = np.mean(np.array(y[1:last_idx]).reshape(-1, bin_size), axis=1)
-            xs.append([x[0]] + list(x_binned) + [np.mean(x[last_idx:-1]), x[-1]])
-            ys.append([y[0]] + list(y_binned) + [np.mean(y[last_idx:-1]), y[-1]])
+            xs_plot.append([x[0]] + list(x_binned) + [np.mean(x[last_idx:-1]), x[-1]])
+            ys_plot.append([y[0]] + list(y_binned) + [np.mean(y[last_idx:-1]), y[-1]])
         else:
-            xs.append(x.copy())
-            ys.append(y)
-
-        # make x monotonic for AUTC
-        for i in range(1, len(x)):
-            if x[i] < x[i - 1]:
-                x[i] = x[i - 1]
-        h1_area = (x[-1] - x[0]) * h1_avg_acc
-        autc = auc(x, y) - h1_area
-        autcs.append(autc)
-
-        if model_name == 'no hist':
-            no_hist_autc = autc
+            xs_plot.append(x)
+            ys_plot.append(y)
 
     min_x = min(min(i) for i in xs)
     h1_x = [min_x, max(max(i) for i in xs)]
@@ -127,10 +121,9 @@ def plot_results(log_dir, dataset, user_type, models, bin_size=1, user_name='', 
     model_names_sorted = []
     colors = []
 
-    color_idx = 0
+    color_idx = 1
     for i in sorted_idxs:
-        x = xs[i]
-        y = ys[i]
+        x_plot, y_plot = xs_plot[i], ys_plot[i]
         autc_improv = autc_improvs[i]
         if autc_improv >= 0:
             sign = '+'
@@ -139,18 +132,21 @@ def plot_results(log_dir, dataset, user_type, models, bin_size=1, user_name='', 
         model_name = model_names[i]
         model_names_sorted.append(model_name)
         model = models[model_name]
-        if model_name == 'no hist':
-            color = 'black'
+        if smooth_color_progression:
+            if model_name == 'no hist':
+                color = 'black'
+            else:
+                color = cmap(color_idx / (len(model_names) + 1))
+                color_idx += 1
         else:
-            color = cmap(color_idx / len(model_names))
-            color_idx += 1
+            color = model['color']
 
         sample_weight = model['sample_weight']
         if model_name == 'sim_ann':
             sample_weight = ['%.3f' % i for i in sample_weight]
         cell_text += [sample_weight + ['%s%.1f%%' % (sign, autc_improv)]]
 
-        ax.plot(x, y, marker='.', label=model_name, color=color)
+        ax.plot(x_plot, y_plot, marker='.', label=model_name, color=color)
         if model_name == 'no hist':
             color = 'white'
         colors.append(color)
@@ -168,42 +164,47 @@ def plot_results(log_dir, dataset, user_type, models, bin_size=1, user_name='', 
     ax.set_xlabel('compatibility')
     ax.set_ylabel('accuracy')
     if user_name == '':
-        title = 'average tradeoffs, dataset=%s user_type=%s' % (dataset, user_type)
-        ax.set_title(title)
-        plt.savefig('%s\\plots.png' % log_dir, bbox_inches='tight')
+        title = '%s tradeoffs, dataset=%s user_type=%s' % (log_set, dataset, user_type)
+        save_name = '%s\\%s_plots.png' % (log_dir, log_set)
     else:
         len_h = df_results.loc[0]['len']
         title = 'dataset=%s user=%s len(h)=%d' % (dataset, user_name, len_h)
-        ax.set_title(title)
-        plt.savefig('%s\\%s.png' % (log_dir, user_name), bbox_inches='tight')
+        save_name = '%s\\%s_%s.png' % (log_dir, log_set, user_name)
+    ax.set_title(title)
+    plt.savefig(save_name, bbox_inches='tight')
     if show_tradeoff_plots:
         plt.show()
     plt.clf()
 
 
-# dataset = 'assistment'
-# version = '100 seeds'
-# user_type = 'user_id'
+dataset = 'assistment'
+version = 'unbalanced\\without skills'
+user_type = 'user_id'
 
-dataset = 'salaries'
-version = '1'
-user_type = 'relationship'
+# dataset = 'salaries'
+# version = '1'
+# user_type = 'relationship'
 
+# log_set = 'test'
+log_set = 'valid'
+# individual_users = False
 individual_users = True
-bin_size = 3
+bin_size = 2
 
 results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing'
 log_dir = '%s\\%s\\%s\\%s' % (results_dir, dataset, version, user_type)
-models = get_model_dict()
+models = get_model_dict('jet')
+# models = get_model_dict('gist_rainbow')
 
 if not individual_users:
-    plot_results(log_dir, dataset, user_type, models, bin_size=bin_size)
+    plot_results(log_dir, dataset, user_type, models, log_set, bin_size=bin_size)
 else:
-    users_dir = '%s\\%s\\%s\\%s\\user_logs' % (results_dir, dataset, version, user_type)
+    users_dir = '%s\\%s\\%s\\%s\\%s_user_logs' % (results_dir, dataset, version, user_type, log_set)
     if not os.path.exists(users_dir):
         safe_make_dir(users_dir)
-        split_users(log_dir)
-    user_ids = pd.unique(pd.read_csv('%s\\log.csv' % log_dir)['user'])
+        split_users(log_dir, log_set)
+    user_ids = pd.unique(pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))['user'])
     for user_id in user_ids:
-        plot_results('%s\\user_logs' % log_dir, dataset, user_type, models, bin_size=bin_size, user_name=user_id)
+        plot_results('%s\\%s_user_logs' % (log_dir, log_set), dataset, user_type, models, log_set, bin_size=bin_size,
+                     user_name=user_id)
 

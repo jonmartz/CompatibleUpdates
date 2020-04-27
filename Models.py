@@ -1,5 +1,4 @@
 import numpy as np
-# import tensorflow as tf
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.tree import DecisionTreeRegressor
 
@@ -124,9 +123,9 @@ class DecisionTree:
                 kernel_likelihood = np.sum(hist.kernels, axis=1) / len(hist.y_train)
                 sample_weight = (1 - diss_weight) + diss_weight * old_correct * kernel_likelihood
 
-            elif model_name in ['L1', 'L3', 'L4', 'baseline']:  # these need dissonance from history
+            elif model_name in ['L1', 'L3', 'L4', 'no diss']:  # these need dissonance from history
 
-                if model_name == 'baseline':  # consider history without dissonance
+                if model_name == 'no diss':  # consider history without dissonance
                     sample_weight = (1 - diss_weight) + diss_weight * hist.range
 
                 elif model_name == 'L1':  # get likelihood from weighted average of kernels
@@ -217,17 +216,20 @@ class ParametrizedTree(DecisionTree):
 
     def get_sample_weight(self, x, y):
         diss_w = self.diss_weight
-        hist_range = self.hist.range
         general_loss, general_diss, hist_loss, hist_diss = self.sample_weight_params
 
         # getting old predictions
         old_predicted = np.round(self.old_model.predict(x))
         old_correct = np.equal(old_predicted, y).astype(int).reshape(-1)
 
-        if general_diss == hist_diss == 0:  # baseline
-            sample_weight = (1 - diss_w) * general_loss + diss_w * hist_loss * hist_range
+        if hist_loss == hist_diss == 0:  # no hist
+            sample_weight = (1 - diss_w) * general_loss + diss_w * old_correct * general_diss
         else:
-            sample_weight = (1 - diss_w) * (general_loss + hist_loss * hist_range) \
-                            + diss_w * old_correct * (general_diss + hist_diss * hist_range)
+            hist_range = self.hist.range
+            if general_diss == hist_diss == 0:  # no diss
+                sample_weight = (1 - diss_w) * general_loss + diss_w * hist_loss * hist_range
+            else:
+                sample_weight = (1 - diss_w) * (general_loss + hist_loss * hist_range) \
+                                + diss_w * old_correct * (general_diss + hist_diss * hist_range)
 
         return sample_weight * 10
