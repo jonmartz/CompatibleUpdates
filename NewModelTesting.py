@@ -45,7 +45,7 @@ valid_frac = 0.1
 h1_len = 20
 h2_len = 5000
 seeds = range(5)
-weights_num = 50
+weights_num = 5
 weights_range = [0, 1]
 sim_ann_var = 0.05
 max_sim_ann_iter = -1
@@ -510,7 +510,7 @@ for user_col in user_cols:
     for ccp_alpha in ccp_alphas:
         ccp_alpha_idx += 1
 
-        # print('training h1s and no_hists...')
+        print('training h1s and no_hists...')
         for seed_idx in range(len(seeds)):
             seed = seeds[seed_idx]
 
