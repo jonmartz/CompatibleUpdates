@@ -16,10 +16,13 @@ def split_users(log_dir, log_set):
     log_by_users = df_log.groupby('user')
 
     for user_id, user_data in log_by_users:
-        mod_user_id = []
-        for row in user_data['seed']:
-            mod_user_id += [str(user_id) + '_' + str(row)]
-        user_data['user'] = mod_user_id
+        try:
+            mod_user_id = []
+            for row in user_data['seed']:
+                mod_user_id += [str(user_id) + '_' + str(row)]
+            user_data['user'] = mod_user_id
+        except KeyError:
+            user_data['user'] = user_id
         user_data.to_csv('%s\\%s_user_logs\\%s_%s.csv' % (log_dir, log_set, log_set, user_id), index=False)
 
 
@@ -55,16 +58,11 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     else:
         df_results = pd.read_csv('%s\\%s_%s.csv' % (log_dir, log_set, user_name))
 
-    only_these_users = [
-        78970,
-        75169,
-    ]
-    df_results = df_results[df_results['user'].isin(only_these_users)]
-
-    # df_best_models = pd.read_csv('%s\\best_models_test.csv' % log_dir)
-    # best_models = {}
-    # for i in range(len(df_best_models)):
-    #     best_models[df_best_models['user'][i]] = df_best_models['model'][i]
+    # only_these_users = [
+    #     78970,
+    #     75169,
+    # ]
+    # df_results = df_results[df_results['user'].isin(only_these_users)]
 
     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
     xs, ys, xs_plot, ys_plot = [], [], [], []
@@ -169,12 +167,14 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
         if model_name == 'best_u':
             x_best, y_best, best_color = x_plot, y_plot, color
         else:
-            ax.plot(x_plot, y_plot, marker='.', label=model_name, color=color)
+            # ax.plot(x_plot, y_plot, marker='.', label=model_name, color=color)
+            ax.plot(x_plot, y_plot, label=model_name, color=color)
         if model_name == 'no hist':
             color = 'white'
         colors.append(color)
     if 'best_u' in model_names:
-        ax.plot(x_best, y_best, marker='.', label='best_u', color=best_color)
+        # ax.plot(x_best, y_best, marker='.', label='best_u', color=best_color)
+        ax.plot(x_best, y_best, label='best_u', color=best_color)
 
     # table
     columns = ('gen', 'gen diss', 'hist', 'hist diss', '+ AUTC %')
@@ -199,7 +199,7 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     return best_model
 
 
-def add_best_model(log_dir):
+def add_best_model(log_dir, valid_set='valid'):
     # # GET BEST MODELS FROM VALIDATION SET #
     # df_valid = pd.read_csv('%s\\valid_log.csv' % log_dir)
     # model_names = [i[:-2] for i in df_valid.columns if ' x' in i]
@@ -253,8 +253,7 @@ def add_best_model(log_dir):
     df_test = pd.read_csv('%s\\test_log.csv' % log_dir)
     user_names = pd.unique(df_test['user'])
     groups_by_user = df_test.groupby('user')
-    # best_models = pd.read_csv('%s\\valid_best_models.csv' % log_dir)['model']
-    best_models = pd.read_csv('%s\\best_models_test.csv' % log_dir)['model']
+    best_models = pd.read_csv('%s\\best_models_%s.csv' % (log_dir, valid_set))['model']
     new_model_x = []
     new_model_y = []
     for i in range(len(user_names)):
@@ -269,22 +268,41 @@ def add_best_model(log_dir):
     df_test.to_csv('%s\\test_with_best_log.csv' % log_dir, index=False)
 
 
-def binarize_results_by_compat_values(log_dir, log_set, bins=50):
+def binarize_results_by_compat_values(log_dir, log_set, bins=100):
     df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set)).drop(columns=['seed'])
     user_names = pd.unique(df_results['user'])
     groups_by_user = df_results.groupby('user')
     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
-    df_binarized = pd.DataFrame(columns=df_results.columns, dtype=np.int64)
+    df_bins = pd.DataFrame(columns=df_results.columns, dtype=np.int64)
     for user_name in user_names:
         df_user = groups_by_user.get_group(user_name)
         df_by_weight = df_user.groupby('weight').mean()
-        df_user_dict = {'user': user_name, 'len': df_user['len'].iloc[0], 'h1_acc': df_by_weight['h1_acc'].iloc[0],
-                        'weight': list(range(bins))}
+        weights = np.array(range(bins + 1)) / bins
+        df_user_bins = pd.DataFrame({'user': user_name, 'len': df_user['len'].iloc[0],
+                                     'h1_acc': df_by_weight['h1_acc'].iloc[0], 'weight': weights})
         for model_name in model_names:
-            x = np.mean(df_by_weight['%s x' % model_name])
-            y = np.mean(df_by_weight['%s y' % model_name])
-        df_binarized = df_binarized.append(df_user)
-    df_binarized.to_csv('%s\\%s_binarized_log.csv' % (log_dir, log_set), index=False)
+            x = df_by_weight['%s x' % model_name].tolist()
+            for i in range(1, len(x)):
+                if x[i] < x[i - 1]:
+                    x[i] = x[i - 1]
+            y = df_by_weight['%s y' % model_name].tolist()
+            x_bins = np.array([i / bins for i in range(bins + 1)])
+            x_bins = x_bins * (x[-1] - x[0]) + x[0]
+            y_bins = []
+            i = 0
+            for x_bin in x_bins:  # get y given x for each x_bin
+                while not x[i] <= x_bin <= x[i + 1]:
+                    i += 1
+                x_left, x_right, y_left, y_right = x[i], x[i + 1], y[i], y[i + 1]
+                if x_left == x_right:  # vertical line
+                    y_bins.append(max(y_left, y_right))
+                else:
+                    slope = (y_right - y_left) / (x_right - x_left)
+                    y_bins.append(y_left + slope * (x_bin - x_left))
+            df_user_bins['%s x' % model_name] = x_bins
+            df_user_bins['%s y' % model_name] = y_bins
+        df_bins = df_bins.append(df_user_bins)
+    df_bins.to_csv('%s\\%s_bins_log.csv' % (log_dir, log_set), index=False)
 
 
 dataset = 'assistment'
@@ -298,9 +316,10 @@ user_type = 'user_id'
 log_set = 'test'
 # log_set = 'valid'
 log_set += '_with_best'
-individual_users = False
-binarize_by_compat = True
+log_set += '_bins'
+individual_users = True
 add_best = False
+binarize_by_compat = False
 bin_size = 1
 
 results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing'
