@@ -44,8 +44,8 @@ train_frac = 0.8
 valid_frac = 0.1
 h1_len = 20
 h2_len = 5000
-seeds = range(5)
-weights_num = 5
+seeds = range(30, 100)
+weights_num = 50
 weights_range = [0, 1]
 sim_ann_var = 0.05
 max_sim_ann_iter = -1
@@ -408,7 +408,7 @@ for user_col in user_cols:
                 seed_df = pd.DataFrame(columns=[user_col] + all_columns, dtype=np.int64)
                 for user_id, hist in sorted_hists:
                     hist[user_col] = [user_id] * len(hist)
-                    seed_df = seed_df.append(hist)
+                    seed_df = seed_df.append(hist, sort=True)
                 seed_df.to_csv('%s\\%d.csv' % (cache_dir, seed), index=False)
         del groups_by_user
         del hists
