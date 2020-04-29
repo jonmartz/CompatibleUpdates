@@ -58,12 +58,6 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     else:
         df_results = pd.read_csv('%s\\%s_%s.csv' % (log_dir, log_set, user_name))
 
-    # only_these_users = [
-    #     78970,
-    #     75169,
-    # ]
-    # df_results = df_results[df_results['user'].isin(only_these_users)]
-
     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
     xs, ys, xs_plot, ys_plot = [], [], [], []
     autcs = []
@@ -184,7 +178,7 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     ax.set_xlabel('compatibility')
     ax.set_ylabel('accuracy')
     if user_name == '':
-        title = '%s tradeoffs, dataset=%s user_type=%s' % (log_set, dataset, user_type)
+        title = 'dataset=%s user_type=%s' % (dataset, user_type)
         save_name = '%s\\%s_plots.png' % (log_dir, log_set)
     else:
         len_h = df_results.loc[0]['len']
@@ -197,6 +191,7 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     plt.clf()
 
     return best_model
+    # todo: return best model by weight
 
 
 def add_best_model(log_dir, valid_set='valid'):
@@ -304,6 +299,48 @@ def binarize_results_by_compat_values(log_dir, log_set, bins=100):
         df_bins = df_bins.append(df_user_bins)
     df_bins.to_csv('%s\\%s_bins_log.csv' % (log_dir, log_set), index=False)
 
+    # print('binarizing...')
+    #     df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
+    #     user_names = pd.unique(df_results['user'])
+    #     groups_by_user = df_results.groupby('user')
+    #     seeds = pd.unique(df_results['seed'])
+    #     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
+    #     weights = np.array(range(bins + 1)) / bins
+    #     df_bins = pd.DataFrame(columns=df_results.columns, dtype=np.int64)
+    #     user_idx = 0
+    #     for user_name in user_names:
+    #         user_idx += 1
+    #         print('%d/%d user = %s' % (user_idx, len(user_names), user_name))
+    #         df_user = groups_by_user.get_group(user_name)
+    #         groups_by_seed = df_user.groupby('seed')
+    #         for seed in seeds:
+    #             df_user_seed = groups_by_seed.get_group(seed)
+    #             df_by_weight = df_user_seed.groupby('weight').mean()
+    #             df_user_seed_bins = pd.DataFrame({'user': user_name, 'len': df_user_seed['len'].iloc[0], 'seed': seed,
+    #                                          'h1_acc': df_by_weight['h1_acc'].iloc[0], 'weight': weights})
+    #             for model_name in model_names:
+    #                 x = df_by_weight['%s x' % model_name].tolist()
+    #                 y = df_by_weight['%s y' % model_name].tolist()
+    #                 for i in range(1, len(x)):
+    #                     if x[i] < x[i - 1]:
+    #                         x[i] = x[i - 1]
+    #                 x_bins = np.array([i / bins for i in range(1, bins)])
+    #                 x_bins = (x_bins * (x[-1] - x[0]) + x[0]).tolist()
+    #                 y_bins = []
+    #                 i = 0
+    #                 for x_bin in x_bins:  # get y given x for each x_bin
+    #                     while not x[i] <= x_bin <= x[i + 1]:
+    #                         i += 1
+    #                     x_left, x_right, y_left, y_right = x[i], x[i + 1], y[i], y[i + 1]
+    #                     if x_left == x_right:  # vertical line
+    #                         y_bins.append(max(y_left, y_right))
+    #                     else:
+    #                         slope = (y_right - y_left) / (x_right - x_left)
+    #                         y_bins.append(y_left + slope * (x_bin - x_left))
+    #                 df_user_seed_bins['%s x' % model_name] = [x[0]] + x_bins + [x[-1]]
+    #                 df_user_seed_bins['%s y' % model_name] = [y[0]] + y_bins + [y[-1]]
+    #             df_bins = df_bins.append(df_user_seed_bins)
+    #     df_bins.to_csv('%s\\%s_bins_log.csv' % (log_dir, log_set), index=False)
 
 dataset = 'assistment'
 version = 'unbalanced\\without skills'
@@ -317,15 +354,15 @@ log_set = 'test'
 # log_set = 'valid'
 log_set += '_with_best'
 log_set += '_bins'
-individual_users = True
+individual_users = False
 add_best = False
 binarize_by_compat = False
 bin_size = 1
 
 results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing'
 log_dir = '%s\\%s\\%s\\%s' % (results_dir, dataset, version, user_type)
-# models = get_model_dict('jet')
-models = get_model_dict('gist_rainbow')
+models = get_model_dict('jet')
+# models = get_model_dict('gist_rainbow')
 
 if add_best:
     add_best_model(log_dir)
