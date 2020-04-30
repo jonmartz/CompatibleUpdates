@@ -44,7 +44,8 @@ train_frac = 0.8
 valid_frac = 0.1
 h1_len = 20
 h2_len = 5000
-seeds = range(30, 100)
+seeds = range(50)
+inner_seeds = range(10)
 weights_num = 50
 weights_range = [0, 1]
 # sim_ann
