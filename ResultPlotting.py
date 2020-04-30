@@ -58,6 +58,13 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     else:
         df_results = pd.read_csv('%s\\%s_%s.csv' % (log_dir, log_set, user_name))
 
+    # skip_users = [
+    #     # 'Husband',
+    #     # 'Not-in-family',
+    #     # 'Own-child',
+    # ]
+    # df_results = df_results[~df_results['user'].isin(skip_users)]
+
     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
     xs, ys, xs_plot, ys_plot = [], [], [], []
     autcs = []
@@ -76,12 +83,20 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
         y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
 
         # make x monotonic for AUTC
-        x_monotonic = x.copy()
-        for i in range(1, len(x_monotonic)):
-            if x_monotonic[i] < x_monotonic[i - 1]:
-                x_monotonic[i] = x_monotonic[i - 1]
-        h1_area = (x_monotonic[-1] - x_monotonic[0]) * h1_avg_acc
-        autc = auc(x_monotonic, y) - h1_area
+        # x_monotonic = x.copy()
+        # for i in range(1, len(x_monotonic)):
+        #     if x_monotonic[i] < x_monotonic[i - 1]:
+        #         x_monotonic[i] = x_monotonic[i - 1]
+        # h1_area = (x_monotonic[-1] - x_monotonic[0]) * h1_avg_acc
+        # autc = auc(x_monotonic, y) - h1_area
+
+        for i in range(1, len(x)):
+            if x[i] < x[i - 1]:
+                x[i] = x[i - 1]
+
+        h1_area = (x[-1] - x[0]) * h1_avg_acc
+        autc = auc(x, y) - h1_area
+        
         autcs.append(autc)
         if model_name == 'no hist':
             no_hist_autc = autc
@@ -161,13 +176,11 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
         if model_name == 'best_u':
             x_best, y_best, best_color = x_plot, y_plot, color
         else:
-            # ax.plot(x_plot, y_plot, marker='.', label=model_name, color=color)
             ax.plot(x_plot, y_plot, label=model_name, color=color)
         if model_name == 'no hist':
             color = 'white'
         colors.append(color)
     if 'best_u' in model_names:
-        # ax.plot(x_best, y_best, marker='.', label='best_u', color=best_color)
         ax.plot(x_best, y_best, label='best_u', color=best_color)
 
     # table
@@ -263,26 +276,48 @@ def add_best_model(log_dir, valid_set='valid'):
     df_test.to_csv('%s\\test_with_best_log.csv' % log_dir, index=False)
 
 
-def binarize_results_by_compat_values(log_dir, log_set, bins=100):
+def binarize_results_by_compat_values(log_dir, log_set, bin_num=100):
     df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set)).drop(columns=['seed'])
     user_names = pd.unique(df_results['user'])
     groups_by_user = df_results.groupby('user')
     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
     df_bins = pd.DataFrame(columns=df_results.columns, dtype=np.int64)
+    bins = np.array([i / bin_num for i in range(bin_num + 1)])
+    weights = np.array(range(bin_num + 1)) / bin_num
     for user_name in user_names:
         df_user = groups_by_user.get_group(user_name)
         df_by_weight = df_user.groupby('weight').mean()
-        weights = np.array(range(bins + 1)) / bins
+        h1_y = df_by_weight['h1_acc'].iloc[0]
         df_user_bins = pd.DataFrame({'user': user_name, 'len': df_user['len'].iloc[0],
-                                     'h1_acc': df_by_weight['h1_acc'].iloc[0], 'weight': weights})
+                                     'h1_acc': h1_y, 'weight': weights})
+
+        # get original x (monotonic) and y values
+        xs = []
+        ys = []
         for model_name in model_names:
             x = df_by_weight['%s x' % model_name].tolist()
-            for i in range(1, len(x)):
+            y = df_by_weight['%s y' % model_name].tolist()
+            for i in range(1, len(x)):  # make monotonic increasing
                 if x[i] < x[i - 1]:
                     x[i] = x[i - 1]
-            y = df_by_weight['%s y' % model_name].tolist()
-            x_bins = np.array([i / bins for i in range(bins + 1)])
-            x_bins = x_bins * (x[-1] - x[0]) + x[0]
+            xs.append(x)
+            ys.append(y)
+
+        # add min and max x to each model
+        min_x = min([min(i) for i in xs])
+        max_x = max([max(i) for i in xs])
+        for i in range(len(model_names)):
+            x = xs[i]
+            y = ys[i]
+            xs[i] = [min_x] + x + [x[-1], max_x]
+            ys[i] = [y[0]] + y + [h1_y, h1_y]
+
+        # binarize
+        for idx in range(len(model_names)):
+            model_name = model_names[idx]
+            x = xs[idx]
+            y = ys[idx]
+            x_bins = (bins * (x[-1] - x[0]) + x[0]).tolist()
             y_bins = []
             i = 0
             for x_bin in x_bins:  # get y given x for each x_bin
@@ -342,22 +377,29 @@ def binarize_results_by_compat_values(log_dir, log_set, bins=100):
     #             df_bins = df_bins.append(df_user_seed_bins)
     #     df_bins.to_csv('%s\\%s_bins_log.csv' % (log_dir, log_set), index=False)
 
+
 dataset = 'assistment'
 version = 'unbalanced\\without skills'
 user_type = 'user_id'
 
 # dataset = 'salaries'
-# version = '1'
+# version = 'unbalanced\\1'
 # user_type = 'relationship'
 
-log_set = 'test'
-# log_set = 'valid'
-log_set += '_with_best'
-log_set += '_bins'
-individual_users = False
+# log_set = 'test'
+log_set = 'valid'
+# log_set += '_with_best'
+# log_set += '_bins'
+individual_users = True
 add_best = False
 binarize_by_compat = False
 bin_size = 1
+
+# steps to get average tradeoff:
+# 1. valid + individual_users
+# 2. add_best
+# 3. test_with_best + binarize_by_compat
+# 4. test_with_best_bins
 
 results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing'
 log_dir = '%s\\%s\\%s\\%s' % (results_dir, dataset, version, user_type)

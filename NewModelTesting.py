@@ -31,13 +31,13 @@ def min_and_max(x):
 
 # Data-set paths
 
-dataset_name = 'assistment'
+dataset_name = "salaries"
 # data settings
-target_col = 'correct'
-original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-user_cols = ['user_id']
-# skip_cols = []
-skip_cols = ['skill']
+target_col = 'salary'
+original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+                       'native-country']
+user_cols = ['relationship']
+skip_cols = ['fnlgwt', 'education', 'native-country']
 df_max_size = 100000
 # experiment settings
 train_frac = 0.8
@@ -47,51 +47,53 @@ h2_len = 5000
 seeds = range(30, 100)
 weights_num = 50
 weights_range = [0, 1]
+# sim_ann
 sim_ann_var = 0.05
 max_sim_ann_iter = -1
 iters_to_cooling = 100
 # model settings
 max_depth = None
-ccp_alphas = [0.004]
+ccp_alphas = [0.008]
 # ccp_alphas = [i / 1000 for i in range(1, 11)]
-sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
-best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
+sample_weights_factor = None
+# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# best_sample_weight = []
 # user settings
-min_hist_len = 300
-max_hist_len = 100000
+min_hist_len = 50
+max_hist_len = 2000
 current_user_count = 0
 users_to_not_test_on = []
 only_these_users = []
 
-# dataset_name = "salaries"
+# dataset_name = 'assistment'
 # # data settings
-# target_col = 'salary'
-# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-#                        'native-country']
-# user_cols = ['relationship']
-# skip_cols = ['fnlgwt', 'education', 'native-country']
+# target_col = 'correct'
+# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+# user_cols = ['user_id']
+# # skip_cols = []
+# skip_cols = ['skill']
 # df_max_size = 100000
 # # experiment settings
 # train_frac = 0.8
+# valid_frac = 0.1
 # h1_len = 20
 # h2_len = 5000
-# seeds = range(30)
-# weights_num = 10
+# seeds = range(30, 100)
+# weights_num = 50
 # weights_range = [0, 1]
-# # sim_ann
 # sim_ann_var = 0.05
 # max_sim_ann_iter = -1
 # iters_to_cooling = 100
 # # model settings
 # max_depth = None
-# ccp_alphas = [0.002]
-# sample_weights_factor = None
-# # sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# # best_sample_weight = []
+# ccp_alphas = [0.004]
+# # ccp_alphas = [i / 1000 for i in range(1, 11)]
+# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# # best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
+# best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
 # # user settings
-# min_hist_len = 50
-# max_hist_len = 2000
+# min_hist_len = 300
+# max_hist_len = 100000
 # current_user_count = 0
 # users_to_not_test_on = []
 # only_these_users = []
@@ -500,15 +502,16 @@ for user_col in user_cols:
     h1_by_seed = []
     X_train_by_seed = []
     Y_train_by_seed = []
-    no_hists_by_seed = None
-    if not sim_ann and 'no hist' in model_names_to_test:
-        no_hists_by_seed = []
     # X_test_by_seed = []
     # Y_test_by_seed = []
 
     ccp_alpha_idx = 0
     for ccp_alpha in ccp_alphas:
         ccp_alpha_idx += 1
+
+        no_hists_by_seed = None
+        if not sim_ann and 'no hist' in model_names_to_test:
+            no_hists_by_seed = []
 
         print('training h1s and no_hists...')
         for seed_idx in range(len(seeds)):
