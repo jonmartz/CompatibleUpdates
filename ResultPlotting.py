@@ -515,24 +515,25 @@ def best_count_values(log_dir, log_set):
 
 
 dataset = 'assistment'
-version = 'unbalanced\\without skills'
+# version = 'unbalanced\\without skills'
+version = 'unbalanced\\inner seeds'
 user_type = 'user_id'
 
 # dataset = 'salaries'
 # version = 'unbalanced\\1'
 # user_type = 'relationship'
 
-# log_set = 'test'
-log_set = 'valid'
-# log_set += '_with_best'
+log_set = 'test'
+# log_set = 'valid'
+log_set += '_with_best'
 log_set += '_bins'
-individual_users = True
+individual_users = False
 get_best = False
 add_best = False
 count_best = False
 binarize_by_compat = False
 
-bin_size = 2
+bin_size = 1
 
 # steps to get average tradeoff:
 # 1. valid + individual_users + get_best
@@ -573,7 +574,7 @@ else:
             user_id = user_ids[user_idx]
             print('%d/%d seed %d' % (user_idx + 1, len(user_ids), user_id))
             seeds, best_models_by_seed = get_best_models('%s\\users_%s\\logs' % (log_dir, log_set), models, log_set,
-                                                         user_name=user_id)
+                                                         user_name=user_id, plot_tradeoffs=True)
             user_col += [user_id] * len(seeds)
             seed_col += seeds
             model_col += best_models_by_seed
