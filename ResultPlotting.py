@@ -1,4 +1,5 @@
 import os
+import random
 
 import numpy as np
 import pandas as pd
@@ -202,9 +203,7 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     if show_tradeoff_plots:
         plt.show()
     plt.clf()
-
-    return best_model
-    # todo: return best model by weight
+    # return best_model
 
 
 def get_best_models(log_dir, models, log_set, user_name='', plot_tradeoffs=False):
@@ -227,11 +226,12 @@ def get_best_models(log_dir, models, log_set, user_name='', plot_tradeoffs=False
         seed = seeds[seed_idx]
         print('\t%d/%d seed %d' % (seed_idx + 1, len(seeds), seed))
         df_seed = groups_by_seed.get_group(seed)
-        h1_avg_acc = np.average(df_seed['h1_acc'], weights=df_seed['len'])
         groups_by_weight = df_seed.groupby('weight')
         if user_name == '':
+            h1_avg_acc = np.average(df_seed['h1_acc'], weights=df_seed['len'])
             dfs_by_weight = [groups_by_weight.get_group(i) for i in weights]
         else:
+            h1_avg_acc = np.mean(df_seed['h1_acc'])
             means = groups_by_weight.mean()
 
         autcs = []
@@ -246,9 +246,9 @@ def get_best_models(log_dir, models, log_set, user_name='', plot_tradeoffs=False
                 x = means['%s x' % model_name].tolist()
                 y = means['%s y' % model_name].tolist()
 
-            for i in range(1, len(x)):
-                if x[i] < x[i - 1]:
-                    x[i] = x[i - 1]
+            # for i in range(1, len(x)):
+            #     if x[i] < x[i - 1]:
+            #         x[i] = x[i - 1]
             h1_area = (x[-1] - x[0]) * h1_avg_acc
             autc = auc(x, y) - h1_area
             autcs.append(autc)
@@ -264,15 +264,15 @@ def get_best_models(log_dir, models, log_set, user_name='', plot_tradeoffs=False
             model_name = model_names[i]
             if model_name not in models.keys():
                 continue
-            x = [min_x] + xs_seed[i]
-            y = ys_seed[i]
-            y = [y[0]] + y
+            # x = [min_x] + xs_seed[i]
+            # y = ys_seed[i]
+            # y = [y[0]] + y
             autc = autcs[i]
             if best_autc is None or autc > best_autc:
                 best_autc = autc
                 best_model = model_name
             if plot_tradeoffs:
-                plt.plot(x, y, label='%s autc=%.5f' % (model_name, autc))
+                plt.plot(xs_seed[i], ys_seed[i], label='%s autc=%.5f' % (model_name, autc))
         if plot_tradeoffs:
             plt.plot([min_x, max_x], [h1_avg_acc, h1_avg_acc], 'k--', label='h1')
             plt.xlabel('compatibility')
@@ -286,7 +286,7 @@ def get_best_models(log_dir, models, log_set, user_name='', plot_tradeoffs=False
     # todo: return best model by weight
 
 
-def add_best_model(log_dir, valid_set='valid'):
+def add_best_model(log_dir, valid_set, test_set):
     # # GET BEST MODELS FROM VALIDATION SET #
     # df_valid = pd.read_csv('%s\\valid_log.csv' % log_dir)
     # model_names = [i[:-2] for i in df_valid.columns if ' x' in i]
@@ -354,9 +354,9 @@ def add_best_model(log_dir, valid_set='valid'):
     # df_test['best_u y'] = new_model_y
     # df_test.to_csv('%s\\test_with_best_log.csv' % log_dir, index=False)
 
-    df_test = pd.read_csv('%s\\test_log.csv' % log_dir)
-    groups_by_user = df_test.groupby('user')
     df_best = pd.read_csv('%s\\best_models_%s.csv' % (log_dir, valid_set))
+    df_test = pd.read_csv('%s\\%s_log.csv' % (log_dir, test_set))
+    groups_by_user = df_test.groupby('user')
     user_names = pd.unique(df_best['user'])
     seeds = pd.unique(df_best['seed'])
     best_models = df_best.to_numpy()
@@ -369,8 +369,8 @@ def add_best_model(log_dir, valid_set='valid'):
         for seed in seeds:
             df_seed = groups_by_seed.get_group(seed)
             best_user, best_seed, best_model = best_models[i]
-            new_model_x += df_seed['%s x' % best_model].tolist()
-            new_model_y += df_seed['%s y' % best_model].tolist()
+            new_model_x.extend(df_seed['%s x' % best_model].tolist())
+            new_model_y.extend(df_seed['%s y' % best_model].tolist())
             # print('(%s=%s) (%d=%d)' % (user_name, best_user, seed, best_seed))
             if user_name != best_user or seed != best_seed:
                 raise ValueError('results and best lists not in same order of user -> seed')
@@ -378,76 +378,97 @@ def add_best_model(log_dir, valid_set='valid'):
 
     df_test['best_u x'] = new_model_x
     df_test['best_u y'] = new_model_y
-    df_test.to_csv('%s\\test_with_best_log.csv' % log_dir, index=False)
+    df_test.to_csv('%s\\%s_with_best_log.csv' % (log_dir, test_set), index=False)
 
 
-def binarize_results_by_compat_values(log_dir, log_set, bin_num=100):
+def binarize_results_by_compat_values(log_dir, log_set, num_bins=100):
+    bins = np.array([i / num_bins for i in range(num_bins + 1)])
     df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
+    dict_binarized = {i: [] for i in df_results.columns}
     user_names = pd.unique(df_results['user'])
-    seeds = pd.unique(df_results['seed'])
     groups_by_user = df_results.groupby('user')
     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
-    df_bins = pd.DataFrame(columns=df_results.columns, dtype=np.int64)
-    bins = np.array([i / bin_num for i in range(bin_num + 1)])
-    weights = np.array(range(bin_num + 1)) / bin_num
+    seeds = None
+    inner_seeds = None
 
     for user_idx in range(len(user_names)):
         user_name = user_names[user_idx]
-        print('%d/%d user=%d' % (user_idx + 1, len(user_names), user_name))
+        print('%d/%d user=%s' % (user_idx + 1, len(user_names), user_name))
         df_user = groups_by_user.get_group(user_name)
-        df_bins_user = pd.DataFrame(columns=df_results.columns, dtype=np.int64)
+        user_len = df_user['len'].iloc[0]
+        user_name_repeated = [user_name] * (num_bins + 1)
+        user_len_repeated = [user_len] * (num_bins + 1)
+        if seeds is None:
+            seeds = pd.unique(df_user['seed'])
         groups_by_seed = df_user.groupby('seed')
 
         for seed_idx in seeds:
             seed = seeds[seed_idx]
             print('\t%d/%d seed=%d' % (seed_idx + 1, len(seeds), seed))
+            seed_repeated = [seed] * (num_bins + 1)
             df_seed = groups_by_seed.get_group(seed)
-            df_by_weight = df_seed.groupby('weight').mean()
-            h1_y = df_by_weight['h1_acc'].iloc[0]
-            df_bins_user_seed = pd.DataFrame({'user': user_name, 'len': df_user['len'].iloc[0],
-                                              'h1_acc': h1_y, 'weight': weights})
-            xs = []
-            ys = []
-            for model_name in model_names:
-                x = df_by_weight['%s x' % model_name].tolist()
-                y = df_by_weight['%s y' % model_name].tolist()
-                for i in range(1, len(x)):  # make monotonic increasing
-                    if x[i] < x[i - 1]:
-                        x[i] = x[i - 1]
-                xs.append(x)
-                ys.append(y)
+            if inner_seeds is None:
+                inner_seeds = pd.unique(df_seed['inner_seed'])
+            groups_by_inner_seed = df_seed.groupby('inner_seed')
 
-            # add min and max x to each model
-            min_x = min([min(i) for i in xs])
-            max_x = max([max(i) for i in xs])
-            for i in range(len(model_names)):
-                x = xs[i]
-                y = ys[i]
-                xs[i] = [min_x] + x + [x[-1], max_x]
-                ys[i] = [y[0]] + y + [h1_y, h1_y]
+            for inner_seed_idx in inner_seeds:
+                inner_seed = inner_seeds[inner_seed_idx]
+                # print('\t\t%d/%d inner_seed=%d' % (inner_seed_idx + 1, len(inner_seeds), inner_seed))
+                df_inner_seed = groups_by_inner_seed.get_group(inner_seed)
+                h1_acc = df_inner_seed['h1_acc'].iloc[0]
+                inner_seed_repeated = [inner_seed] * (num_bins + 1)
+                h1_acc_repeated = [h1_acc] * (num_bins + 1)
 
-            # binarize
-            for idx in range(len(model_names)):
-                model_name = model_names[idx]
-                x = xs[idx]
-                y = ys[idx]
-                x_bins = (bins * (x[-1] - x[0]) + x[0]).tolist()
-                y_bins = []
-                i = 0
-                for x_bin in x_bins:  # get y given x for each x_bin
-                    while not x[i] <= x_bin <= x[i + 1]:
-                        i += 1
-                    x_left, x_right, y_left, y_right = x[i], x[i + 1], y[i], y[i + 1]
-                    if x_left == x_right:  # vertical line
-                        y_bins.append(max(y_left, y_right))
-                    else:
-                        slope = (y_right - y_left) / (x_right - x_left)
-                        y_bins.append(y_left + slope * (x_bin - x_left))
-                df_bins_user_seed['%s x' % model_name] = x_bins
-                df_bins_user_seed['%s y' % model_name] = y_bins
-            df_bins_user = df_bins_user.append(df_bins_user_seed, sort=True)
-        df_bins = df_bins.append(df_bins_user, sort=True)
-    df_bins.to_csv('%s\\%s_bins_log.csv' % (log_dir, log_set), index=False)
+                dict_binarized['user'].extend(user_name_repeated)
+                dict_binarized['len'].extend(user_len_repeated)
+                dict_binarized['seed'].extend(seed_repeated)
+                dict_binarized['inner_seed'].extend(inner_seed_repeated)
+                dict_binarized['h1_acc'].extend(h1_acc_repeated)
+                dict_binarized['weight'].extend(bins)
+                xs = []
+                ys = []
+                for model_name in model_names:
+                    x = df_inner_seed['%s x' % model_name].tolist()
+                    y = df_inner_seed['%s y' % model_name].tolist()
+                    for i in range(1, len(x)):  # make x monotonically increasing
+                        if x[i] < x[i - 1]:
+                            x[i] = x[i - 1]
+                    xs.append(x)
+                    ys.append(y)
+
+                # add min and max x to each model
+                min_x = min([min(i) for i in xs])
+                max_x = max([max(i) for i in xs])
+                x_bins = (bins * (max_x - min_x) + min_x).tolist()
+                # to avoid floating point weirdness in first and last values
+                x_bins[0] = min_x
+                x_bins[-1] = max_x
+                for i in range(len(model_names)):
+                    x = xs[i]
+                    y = ys[i]
+                    xs[i] = [min_x] + x + [x[-1], max_x]
+                    ys[i] = [y[0]] + y + [h1_acc, h1_acc]
+
+                # binarize
+                for model_idx in range(len(model_names)):
+                    model_name = model_names[model_idx]
+                    x = xs[model_idx]
+                    y = ys[model_idx]
+                    y_bins = []
+                    j = 0
+                    for x_bin in x_bins:  # get y given x for each x_bin
+                        while not x[j] <= x_bin <= x[j + 1]:
+                            j += 1
+                        x_left, x_right, y_left, y_right = x[j], x[j + 1], y[j], y[j + 1]
+                        if x_left == x_right:  # vertical line
+                            y_bin = max(y_left, y_right)
+                        else:
+                            slope = (y_right - y_left) / (x_right - x_left)
+                            y_bin = y_left + slope * (x_bin - x_left)
+                        y_bins.append(y_bin)
+                    dict_binarized['%s x' % model_name].extend(x_bins)
+                    dict_binarized['%s y' % model_name].extend(y_bins)
+    pd.DataFrame(dict_binarized).to_csv('%s\\%s_bins_log.csv' % (log_dir, log_set), index=False)
 
     # print('binarizing...')
     #     df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
@@ -515,31 +536,42 @@ def best_count_values(log_dir, log_set):
 
 
 dataset = 'assistment'
-# version = 'unbalanced\\without skills'
 version = 'unbalanced\\inner seeds'
 user_type = 'user_id'
 
 # dataset = 'salaries'
-# version = 'unbalanced\\1'
+# version = 'unbalanced\\inner seeds'
 # user_type = 'relationship'
 
-log_set = 'test'
-# log_set = 'valid'
-log_set += '_with_best'
-log_set += '_bins'
+binarize_by_compat = False
 individual_users = False
 get_best = False
 add_best = False
-count_best = False
-binarize_by_compat = False
 
+# print('phase 1')
+# log_set = 'valid'
+# binarize_by_compat = True
+
+# print('phase 2')
+# log_set = 'valid_bins'
+# individual_users = True
+# get_best = True
+
+# print('phase 3')
+# log_set = 'test'
+# binarize_by_compat = True
+
+# print('phase 4')
+# log_set = 'valid_bins'
+# add_best = True
+
+print('phase 5')
+log_set = 'test_bins_with_best'
+
+# default
+test_set = 'test_bins'
 bin_size = 1
-
-# steps to get average tradeoff:
-# 1. valid + individual_users + get_best
-# 2. add_best
-# 3. test_with_best + binarize_by_compat
-# 4. test_with_best_bins
+count_best = False
 
 results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing'
 log_dir = '%s\\%s\\%s\\%s' % (results_dir, dataset, version, user_type)
@@ -547,7 +579,7 @@ models = get_model_dict('jet')
 # models = get_model_dict('gist_rainbow')
 
 if add_best:
-    add_best_model(log_dir)
+    add_best_model(log_dir, log_set, test_set)
 elif count_best:
     best_count_values(log_dir, log_set)
 elif binarize_by_compat:
@@ -572,7 +604,7 @@ else:
         model_col = []
         for user_idx in range(len(user_ids)):
             user_id = user_ids[user_idx]
-            print('%d/%d seed %d' % (user_idx + 1, len(user_ids), user_id))
+            print('%d/%d seed %s' % (user_idx + 1, len(user_ids), user_id))
             seeds, best_models_by_seed = get_best_models('%s\\users_%s\\logs' % (log_dir, log_set), models, log_set,
                                                          user_name=user_id, plot_tradeoffs=True)
             user_col += [user_id] * len(seeds)
