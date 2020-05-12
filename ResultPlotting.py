@@ -34,6 +34,9 @@ def get_model_dict(cmap_name):
         # 'sim_ann': {'sample_weight': [0.0, 0.6352, 0.3119, 0.0780], 'color': 'purple'},
         'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'green'},
         'best_u': {'sample_weight': ['', '', '', ''], 'color': 'red'},
+        # SYNTHETIC:
+        'model1': {'sample_weight': ['', '', '', ''], 'color': 'red'},
+        'model2': {'sample_weight': ['', '', '', ''], 'color': 'blue'},
     }
     parametrized_models = [  # [general_loss, general_diss, hist_loss, hist_diss]
         ['L1', [0, 0, 1, 1]],
@@ -91,15 +94,15 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
         # h1_area = (x_monotonic[-1] - x_monotonic[0]) * h1_avg_acc
         # autc = auc(x_monotonic, y) - h1_area
 
-        for i in range(1, len(x)):
-            if x[i] < x[i - 1]:
-                x[i] = x[i - 1]
+        # for i in range(1, len(x)):
+        #     if x[i] < x[i - 1]:
+        #         x[i] = x[i - 1]
 
         h1_area = (x[-1] - x[0]) * h1_avg_acc
         autc = auc(x, y) - h1_area
 
         autcs.append(autc)
-        if model_name == 'no hist':
+        if model_name in ['no hist', 'model1']:
             no_hist_autc = autc
 
         xs.append(x)
@@ -114,21 +117,23 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
             xs_plot.append(x)
             ys_plot.append(y)
 
-    min_x = min(min(i) for i in xs)
-    h1_x = [min_x, max(max(i) for i in xs)]
+    min_x = xs[0][0]
+    max_x = xs[0][-1]
+    # min_x = min(min(i) for i in xs)
+    # max_x = max(max(i) for i in xs)
+    h1_x = [min_x, max_x]
     h1_y = [h1_avg_acc, h1_avg_acc]
     ax.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
 
     # adding area on left to no hist for correct autc improvement calculation
-    x_no_hist_ = xs[0]
-    y_no_hist_ = ys[0]
-    min_x_no_hist_ = min(x_no_hist_)
-    if min_x_no_hist_ > min_x:  # for models that start at better compatibility
-        no_hist_autc += (min_x_no_hist_ - min_x) * (y_no_hist_[0] - h1_avg_acc)
+    # x_no_hist_ = xs[0]
+    # y_no_hist_ = ys[0]
+    # min_x_no_hist_ = min(x_no_hist_)
+    # if min_x_no_hist_ > min_x:  # for models that start at better compatibility
+    #     no_hist_autc += (min_x_no_hist_ - min_x) * (y_no_hist_[0] - h1_avg_acc)
 
     autc_improvs = []
-    best_model = ''
-    best_autc = None
+    # best_autc = None
     for i in range(len(model_names)):
         model_name = model_names[i]
         if model_name not in models.keys():
@@ -139,9 +144,9 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
         min_x_model = min(x)
         if min_x_model > min_x:  # for models that start at better compatibility
             autc += (min_x_model - min_x) * (y[0] - h1_avg_acc)
-        if best_autc is None or autc > best_autc:
-            best_autc = autc
-            best_model = model_names[i]
+        # if best_autc is None or autc > best_autc:
+        #     best_autc = autc
+        #     best_model = model_names[i]
         autc_improvs.append((autc / no_hist_autc - 1) * 100)
 
     sorted_idxs = [idx for autc, idx in reversed(sorted(zip(autc_improvs, range(len(autc_improvs)))))]
@@ -177,11 +182,13 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
         if model_name == 'best_u':
             x_best, y_best, best_color = x_plot, y_plot, color
         else:
+            # ax.plot(x_plot, y_plot, label=model_name, color=color, marker='.')
             ax.plot(x_plot, y_plot, label=model_name, color=color)
         if model_name == 'no hist':
             color = 'white'
         colors.append(color)
     if 'best_u' in model_names:
+        # ax.plot(x_best, y_best, label='best_u', color=best_color, marker='.')
         ax.plot(x_best, y_best, label='best_u', color=best_color)
 
     # table
@@ -262,6 +269,7 @@ def get_best_models(log_dir, models, log_set, user_name='', plot_tradeoffs=False
         best_autc = None
         for i in range(len(model_names)):
             model_name = model_names[i]
+            color = models[model_name]['color']
             if model_name not in models.keys():
                 continue
             # x = [min_x] + xs_seed[i]
@@ -272,88 +280,98 @@ def get_best_models(log_dir, models, log_set, user_name='', plot_tradeoffs=False
                 best_autc = autc
                 best_model = model_name
             if plot_tradeoffs:
-                plt.plot(xs_seed[i], ys_seed[i], label='%s autc=%.5f' % (model_name, autc))
+                plt.plot(xs_seed[i], ys_seed[i], label='%s autc=%.5f' % (model_name, autc), color=color)
+                # plt.plot(xs_seed[i], ys_seed[i], label='%s autc=%.5f' % (model_name, autc), marker='.', color=color)
         if plot_tradeoffs:
-            plt.plot([min_x, max_x], [h1_avg_acc, h1_avg_acc], 'k--', label='h1')
+            plt.plot([min_x, max_x], [h1_avg_acc, h1_avg_acc], 'k--', label='h1', marker='.')
             plt.xlabel('compatibility')
             plt.ylabel('accuracy')
             plt.legend()
             plt.title('user=%s seed=%d best=%s' % (user_name, seed, best_model))
-            plt.savefig('%s\\user_%s seed_%d' % (seed_plots_dir, user_name, seed))
+            plt.savefig('%s\\user_%s seed_%d' % (seed_plots_dir, user_name, seed), bbox_inches='tight')
             plt.clf()
         best_models_by_seed.append(best_model)
     return seeds, best_models_by_seed
     # todo: return best model by weight
 
 
-def add_best_model(log_dir, valid_set, test_set):
-    # # GET BEST MODELS FROM VALIDATION SET #
-    # df_valid = pd.read_csv('%s\\valid_log.csv' % log_dir)
-    # model_names = [i[:-2] for i in df_valid.columns if ' x' in i]
-    # seeds = pd.unique(df_valid['seed'])
+def summarize(log_dir, log_set, user_name=''):
+    if user_name == '':
+        df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
+    else:
+        df_results = pd.read_csv('%s\\%s_%s.csv' % (log_dir, log_set, user_name))
+
+    model_names = [i[:-2] for i in df_results.columns if ' x' in i]
+    autc_improvs_by_seed = [[] for i in range(len(model_names))]
+
+    # seeds = pd.unique(df_results['seed']).tolist()
+    # groups_by_seed = df_results.groupby('seed')
+    # weights = pd.unique(df_results['weight'])
     #
-    # # # getting best model by compatibility value
-    # # groups_by_weight = df_valid.groupby('weight')
-    # # dfs_by_weight = [groups_by_weight.get_group(i) for i in groups_by_weight.groups]
-    # # best_by_comp = {}
-    # # best_accuracy_by_comp = None
-    # # for model_name in model_names:
-    # #     x = [np.average(i['%s x' % model_name], weights=i['len']) for i in dfs_by_weight]
-    # #     y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
+    # for seed_idx in range(len(seeds)):
+    #     seed = seeds[seed_idx]
+    #     print('\t%d/%d seed %d' % (seed_idx + 1, len(seeds), seed))
+    #     df_seed = groups_by_seed.get_group(seed)
+    #     groups_by_weight = df_seed.groupby('weight')
+    #     if user_name == '':
+    #         h1_avg_acc = np.average(df_seed['h1_acc'], weights=df_seed['len'])
+    #         dfs_by_weight = [groups_by_weight.get_group(i) for i in weights]
+    #     else:
+    #         h1_avg_acc = np.mean(df_seed['h1_acc'])
+    #         means = groups_by_weight.mean()
     #
-    # # getting best model by user
-    # groups_by_user = df_valid.groupby('user')
-    # user_names = pd.unique(df_valid['user'])
-    # best_model_by_user = {}
-    # best_by_comp_by_user = {}
-    # for user_name in user_names:
-    #     # todo: implement by seed
-    #     df_user = groups_by_user.get_group(user_name)
-    #     # groups_by_weight = df_user.groupby('weight')
-    #     # dfs_by_weight = [groups_by_weight.get_group(i) for i in groups_by_weight.groups]
-    #     means_by_weight = df_user.groupby('weight').mean()
-    #
-    #     # compute raw autcs
-    #     first_x, first_y, autcs = [], [], []
+    #     autcs = []
     #     for model_name in model_names:
-    #         # x = [np.average(i['%s x' % model_name], weights=i['len']) for i in dfs_by_weight]
-    #         # y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
-    #         x = means_by_weight['%s x' % model_name].tolist()
-    #         y = means_by_weight['%s y' % model_name].tolist()
-    #         for i in range(1, len(x)):  # make monotonic
-    #             x[i] = max(x[i], x[i - 1])
-    #         first_x.append(x[0])
-    #         first_y.append(y[0])
-    #         autcs.append(auc(x, y))
+    #         if user_name == '':
+    #             x = [np.average(i['%s x' % model_name], weights=i['len']) for i in dfs_by_weight]
+    #             y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
+    #         else:
+    #             x = means['%s x' % model_name].tolist()
+    #             y = means['%s y' % model_name].tolist()
     #
-    #     # extend plots to min_x of all models' x
-    #     best_autc = 0
-    #     min_x = min(first_x)
+    #         h1_area = (x[-1] - x[0]) * h1_avg_acc
+    #         autc = auc(x, y) - h1_area
+    #         if model_name == 'no hist':
+    #             no_hist_autc = autc
+    #         autcs.append(autc)
+    #
     #     for i in range(len(model_names)):
-    #         model_name = model_names[i]
-    #         autc = autcs[i] + first_y[i] * (first_x[i] - min_x)
-    #         if autc > best_autc:
-    #             best_model_by_user[user_name] = model_name
-    #             best_autc = autc
+    #         autc_improv = autcs[i] / no_hist_autc - 1
+    #         autc_improvs_by_seed[i].append(autc_improv)
+    # return seeds, autc_improvs_by_seed, model_names
 
-    # NEW
+    weights = pd.unique(df_results['weight'])
+    groups_by_weight = df_results.groupby('weight')
+    if user_name == '':
+        h1_avg_acc = np.average(df_results['h1_acc'], weights=df_results['len'])
+        dfs_by_weight = [groups_by_weight.get_group(i) for i in weights]
+    else:
+        h1_avg_acc = np.mean(df_results['h1_acc'])
+        means = groups_by_weight.mean()
 
-    # df_test = pd.read_csv('%s\\test_log.csv' % log_dir)
-    # user_names = pd.unique(df_test['user'])
-    # groups_by_user = df_test.groupby('user')
-    # best_models = pd.read_csv('%s\\best_models_%s.csv' % (log_dir, valid_set))['model']
-    # new_model_x = []
-    # new_model_y = []
-    # for i in range(len(user_names)):
-    #     user_name = user_names[i]
-    #     df_user = groups_by_user.get_group(user_name)
-    #     best_model = best_models[i]
-    #     new_model_x += df_user['%s x' % best_model].tolist()
-    #     new_model_y += df_user['%s y' % best_model].tolist()
-    # df_test['best_u x'] = new_model_x
-    # df_test['best_u y'] = new_model_y
-    # df_test.to_csv('%s\\test_with_best_log.csv' % log_dir, index=False)
+    autcs = []
+    for model_name in model_names:
+        if user_name == '':
+            x = [np.average(i['%s x' % model_name], weights=i['len']) for i in dfs_by_weight]
+            y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
+        else:
+            x = means['%s x' % model_name].tolist()
+            y = means['%s y' % model_name].tolist()
 
+        h1_area = (x[-1] - x[0]) * h1_avg_acc
+        autc = auc(x, y) - h1_area
+        if model_name == 'no hist':
+            no_hist_autc = autc
+        autcs.append(autc)
+
+    for i in range(len(model_names)):
+        autc_improv = autcs[i] / no_hist_autc - 1
+        autc_improvs_by_seed[i].append(autc_improv)
+
+    return [0], autc_improvs_by_seed, model_names
+
+
+def add_best_model(log_dir, valid_set, test_set):
     df_best = pd.read_csv('%s\\best_models_%s.csv' % (log_dir, valid_set))
     df_test = pd.read_csv('%s\\%s_log.csv' % (log_dir, test_set))
     groups_by_user = df_test.groupby('user')
@@ -461,6 +479,7 @@ def binarize_results_by_compat_values(log_dir, log_set, num_bins=100):
                             j += 1
                         x_left, x_right, y_left, y_right = x[j], x[j + 1], y[j], y[j + 1]
                         if x_left == x_right:  # vertical line
+                            # y_bin = min(y_left, y_right)
                             y_bin = max(y_left, y_right)
                         else:
                             slope = (y_right - y_left) / (x_right - x_left)
@@ -538,42 +557,76 @@ def best_count_values(log_dir, log_set):
 dataset = 'assistment'
 version = 'unbalanced\\inner seeds'
 user_type = 'user_id'
+model_type = 'simulated annealing'
 
 # dataset = 'salaries'
 # version = 'unbalanced\\inner seeds'
 # user_type = 'relationship'
+# model_type = 'simulated annealing'
+
+# dataset = 'recividism'
+# version = 'unbalanced\\1'
+# user_type = 'race'
+# model_type = 'simulated annealing'
+
+# dataset = 'averaging tradeoffs'
+# version = 'showing importance of binarization'
+# user_type = 'synthetic_user'
+# model_type = 'synthetic'
 
 binarize_by_compat = False
 individual_users = False
 get_best = False
 add_best = False
+make_summary = False
 
-# print('phase 1')
+# todo: CHOOSE EXPERIMENT PHASE
+
+# print('phase 1 - binarize validation results')
 # log_set = 'valid'
 # binarize_by_compat = True
 
-# print('phase 2')
+# print('phase 2 - get best_u for each user using binarized validation results')
+# # log_set = 'valid_bins'
+# log_set = 'test_bins_with_best'
+# individual_users = True
+# get_best = True
+
+# print('phase 3 - binarize test results')
+# log_set = 'test'
+# binarize_by_compat = True
+
+# print('phase 4 - add best_u computed from validation to binarized test results')
+# log_set = 'valid_bins'
+# add_best = True
+
+# print('phase 5 - generate averaged plots for test results')
+# log_set = 'test_bins_with_best'
+
+# print('phase 6 - generate individual user plots for test results')
+# log_set = 'test_bins_with_best'
+# individual_users = True
+
+print('phase 7 - create test summary')
+log_set = 'test_bins_with_best'
+make_summary = True
+individual_users = True
+
+# print('custom phase 1')
 # log_set = 'valid_bins'
 # individual_users = True
 # get_best = True
 
-# print('phase 3')
-# log_set = 'test'
-# binarize_by_compat = True
-
-# print('phase 4')
+# print('custom phase 2')
+# # log_set = 'valid'
 # log_set = 'valid_bins'
-# add_best = True
-
-print('phase 5')
-log_set = 'test_bins_with_best'
 
 # default
 test_set = 'test_bins'
-bin_size = 1
+bin_size = 10
 count_best = False
 
-results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\simulated annealing'
+results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s' % model_type
 log_dir = '%s\\%s\\%s\\%s' % (results_dir, dataset, version, user_type)
 models = get_model_dict('jet')
 # models = get_model_dict('gist_rainbow')
@@ -596,7 +649,10 @@ else:
     if not os.path.exists(users_dir):
         safe_make_dir(user_logs_dir)
         split_users(log_dir, log_set)
-    user_ids = pd.unique(pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))['user'])
+    df = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
+    user_ids = pd.unique(df['user'])
+    user_groups = df.groupby('user')
+    lens = [user_groups.get_group(i)['len'].iloc[0] for i in user_ids]
     if get_best:
         df = pd.DataFrame(columns=['user', 'seed', 'model'])
         user_col = []
@@ -604,7 +660,7 @@ else:
         model_col = []
         for user_idx in range(len(user_ids)):
             user_id = user_ids[user_idx]
-            print('%d/%d seed %s' % (user_idx + 1, len(user_ids), user_id))
+            print('%d/%d user %s' % (user_idx + 1, len(user_ids), user_id))
             seeds, best_models_by_seed = get_best_models('%s\\users_%s\\logs' % (log_dir, log_set), models, log_set,
                                                          user_name=user_id, plot_tradeoffs=True)
             user_col += [user_id] * len(seeds)
@@ -612,6 +668,39 @@ else:
             model_col += best_models_by_seed
         df = pd.DataFrame({'user': user_col, 'seed': seed_col, 'model': model_col})
         df.to_csv('%s\\best_models_%s.csv' % (log_dir, log_set), index=False)
+    elif make_summary:
+        df = pd.DataFrame(columns=['user', 'seed', 'model'])
+        user_col = []
+        len_col = []
+        weighted_distances = []
+        seed_col = []
+        autc_improv_by_model = None
+        wasserstein_distances = pd.read_csv('%s\\wasserstein_distances.csv' % log_dir, index_col='user')
+        feature_importances = pd.read_csv('%s\\feature_importances.csv' % log_dir, index_col='user')
+        gen_feature_importance = feature_importances.loc['general']
+        for user_idx in range(len(user_ids)):
+            user_id = user_ids[user_idx]
+            hist_len = lens[user_idx]
+            print('%d/%d user %s' % (user_idx + 1, len(user_ids), user_id))
+            seeds, autc_improv_by_model_user, model_names = summarize('%s\\users_%s\\logs' % (log_dir, log_set),
+                                                                      log_set,
+                                                                      user_name=user_id)
+            user_col += [user_id] * len(seeds)
+            len_col += [hist_len] * len(seeds)
+            weighted_distances += [np.average(wasserstein_distances.loc[user_id],
+                                              weights=gen_feature_importance)] * len(seeds)
+            seed_col += seeds
+            if autc_improv_by_model is None:
+                autc_improv_by_model = autc_improv_by_model_user
+            else:
+                for i in range(len(autc_improv_by_model)):
+                    autc_improv_by_model[i].extend(autc_improv_by_model_user[i])
+
+        df_dict = {'user': user_col, 'len': len_col, 'dist': weighted_distances, 'seed': seed_col}
+        for i in range(len(model_names)):
+            df_dict[model_names[i]] = autc_improv_by_model[i]
+        df = pd.DataFrame(df_dict)
+        df.to_csv('%s\\summary_of_%s.csv' % (log_dir, log_set), index=False)
     else:
         for user_idx in range(len(user_ids)):
             user_id = user_ids[user_idx]

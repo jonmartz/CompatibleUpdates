@@ -46,7 +46,7 @@ if __name__ == '__main__':
     # fit models, starting with random initializations
     print('fitting! each dot is a new EM initialization')
 
-    max_num_fit_initializations = -1
+    max_num_fit_initializations = 1
     best_likelihood = float("-inf")
 
     i = 0

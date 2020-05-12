@@ -31,47 +31,13 @@ def min_and_max(x):
 
 # Data-set paths
 
-# dataset_name = 'assistment'
-# # data settings
-# target_col = 'correct'
-# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-# user_cols = ['user_id']
-# # skip_cols = []
-# skip_cols = ['skill']
-# df_max_size = 100000
-# # experiment settings
-# train_frac = 0.8
-# valid_frac = 0.1
-# h1_len = 20
-# h2_len = 5000
-# seeds = range(10)
-# inner_seeds = range(30)
-# weights_num = 30
-# weights_range = [0, 1]
-# sim_ann_var = 0.05
-# max_sim_ann_iter = -1
-# iters_to_cooling = 100
-# # model settings
-# max_depth = None
-# ccp_alphas = [0.004]
-# # ccp_alphas = [i / 1000 for i in range(1, 11)]
-# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# # best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
-# best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
-# # user settings
-# min_hist_len = 300
-# max_hist_len = 100000
-# current_user_count = 0
-# users_to_not_test_on = []
-# only_these_users = []
-
-dataset_name = "salaries"
+dataset_name = 'assistment'
 # data settings
-target_col = 'salary'
-original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-                       'native-country']
-user_cols = ['relationship']
-skip_cols = ['fnlgwt', 'education', 'native-country']
+target_col = 'correct'
+original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+user_cols = ['user_id']
+# skip_cols = []
+skip_cols = ['skill']
 df_max_size = 100000
 # experiment settings
 train_frac = 0.8
@@ -79,23 +45,22 @@ valid_frac = 0.1
 h1_len = 20
 h2_len = 5000
 seeds = range(10)
-inner_seeds = range(30, 60)
+inner_seeds = range(30)
 weights_num = 30
 weights_range = [0, 1]
-# sim_ann
 sim_ann_var = 0.05
 max_sim_ann_iter = -1
 iters_to_cooling = 100
 # model settings
 max_depth = None
-ccp_alphas = [0.008]
+ccp_alphas = [0.004]
 # ccp_alphas = [i / 1000 for i in range(1, 11)]
-sample_weights_factor = None
-# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# best_sample_weight = []
+sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
+best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
 # user settings
-min_hist_len = 50
-max_hist_len = 1000
+min_hist_len = 300
+max_hist_len = 100000
 current_user_count = 0
 users_to_not_test_on = []
 only_these_users = []
@@ -106,24 +71,69 @@ only_these_users = []
 # original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text']
 # user_cols = ['race']
 # skip_cols = ['c_charge_desc', 'priors_count']
+# # skip_cols = ['c_charge_desc', 'age_cat', 'score_text']
+# # skip_cols = ['c_charge_desc', 'priors_count', 'age_cat', 'score_text']
 # df_max_size = 100000
 # # experiment settings
-# train_frac = 0.9
-# h1_len = 50
+# train_frac = 0.8
+# valid_frac = 0.1
+# h1_len = 20
 # h2_len = 5000
 # seeds = range(10)
-# weights_num = 10
+# inner_seeds = range(30)
+# weights_num = 30
 # weights_range = [0, 1]
+# # sim_ann
 # sim_ann_var = 0.3
 # max_sim_ann_iter = -1
-# temperature_iters = 100
+# iters_to_cooling = 100
 # # model settings
 # max_depth = None
-# ccp_alpha = 0.005
-# best_sample_weight = [2.849432394, 0.046259433, 2.915855879, 4.184277544]
+# ccp_alphas = [0.005]
+# # ccp_alphas = [i/10000 for i in range(1, 10)]
+# # ccp_alphas += [i/1000 for i in range(1, 10)]
+# # ccp_alphas += [i/100 for i in range(1, 10)]
+# sample_weights_factor = None
+# # best_sample_weight = [2.849432394, 0.046259433, 2.915855879, 4.184277544]
 # # user settings
 # min_hist_len = 50
 # max_hist_len = 2000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
+
+# dataset_name = "salaries"
+# # data settings
+# target_col = 'salary'
+# original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+#                        'native-country']
+# # user_cols = ['relationship']
+# user_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex']
+# skip_cols = ['fnlgwt', 'education', 'native-country']
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.8
+# valid_frac = 0.1
+# h1_len = 20
+# h2_len = 5000
+# seeds = range(3)
+# inner_seeds = range(5)
+# weights_num = 10
+# weights_range = [0, 1]
+# # sim_ann
+# sim_ann_var = 0.05
+# max_sim_ann_iter = -1
+# iters_to_cooling = 100
+# # model settings
+# max_depth = None
+# ccp_alphas = [0.008]
+# # ccp_alphas = [i / 1000 for i in range(1, 11)]
+# sample_weights_factor = None
+# # sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# # best_sample_weight = []
+# # user settings
+# min_hist_len = 50
+# max_hist_len = 1000
 # current_user_count = 0
 # users_to_not_test_on = []
 # only_these_users = []
@@ -354,6 +364,7 @@ for user_col in user_cols:
         if not os.path.exists('%s\\0.csv' % cache_dir):
             all_seeds_in_cache = False
 
+    print('loading data...')
     if not all_seeds_in_cache:
         categ_cols = original_categ_cols.copy()
         try:  # dont one hot encode the user_col
@@ -362,7 +373,6 @@ for user_col in user_cols:
             pass
 
         # load data
-        print('loading data...')
         dataset_full = pd.read_csv(dataset_path)
         if df_max_size > 0:
             dataset_full = dataset_full[:df_max_size]
@@ -385,7 +395,7 @@ for user_col in user_cols:
         # one hot encoding
         print('one-hot encoding the data... ')
         dataset_full = ce.OneHotEncoder(cols=categ_cols, use_cat_names=True).fit_transform(dataset_full)
-        print('num features = %d' % (dataset_full.shape[1] - 2))  # minus user and target cols
+        # print('num features = %d' % (dataset_full.shape[1] - 2))  # minus user and target cols
 
         # splitting histories
         print('balancing and sorting histories...')
@@ -426,6 +436,8 @@ for user_col in user_cols:
         del hists
     # end of making seed caches
 
+
+
     # lists indexed by seed containing dicts:
     hist_train_ranges_by_seed = []
     hist_trains_by_seed = []
@@ -433,11 +445,12 @@ for user_col in user_cols:
     hist_tests_by_seed = []
     h2_trains_by_seed = []
 
-    print('splitting histories and composing the general train sets...')
     user_ids = []
     # min_and_max_feature_values = pd.DataFrame(columns=all_columns, dtype=np.int64)
     min_and_max_feature_values = pd.read_csv('%s\\all_columns.csv' % cache_dir, dtype=np.int64)
     all_columns = min_and_max_feature_values.columns
+    print('num features = %d' % (len(all_columns) - 1))
+    print('splitting histories and composing the general train sets...')
     for seed in seeds:
         # take longest n histories such that train_frac * sum of lens <= h2 train size
         hist_train_ranges = {}
@@ -1041,7 +1054,7 @@ for user_col in user_cols:
             plt.xlabel('compatibility')
             plt.ylabel('accuracy')
             plt.legend(loc='lower left')
-            title = 'validing models, dataset=%s, cpp_alpha=%s' % (dataset_name, ccp_alpha)
+            title = 'dataset=%s user_col=%s cpp_alpha=%s' % (dataset_name, user_col, ccp_alpha)
             plt.title(title)
             plt.savefig('%s\\cpp_alpha_%.5f.png' % (result_user_type_dir, ccp_alpha))
             # if show_tradeoff_plots:
