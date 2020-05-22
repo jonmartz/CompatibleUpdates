@@ -31,13 +31,12 @@ def min_and_max(x):
 
 # Data-set paths
 
-dataset_name = 'assistment'
+dataset_name = 'ednet'
 # data settings
-target_col = 'correct'
-original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-user_cols = ['user_id']
-# skip_cols = []
-skip_cols = ['skill']
+target_col = 'correct_answer'
+original_categ_cols = ['source', 'platform']
+user_cols = ['user']
+skip_cols = []
 df_max_size = 100000
 # experiment settings
 train_frac = 0.8
@@ -53,17 +52,78 @@ max_sim_ann_iter = -1
 iters_to_cooling = 100
 # model settings
 max_depth = None
-ccp_alphas = [0.004]
-# ccp_alphas = [i / 1000 for i in range(1, 11)]
+ccp_alphas = [0.009]
 sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
-best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
+best_sample_weight = [0, 0, 0, 0]
 # user settings
-min_hist_len = 300
+min_hist_len = 0
 max_hist_len = 100000
 current_user_count = 0
 users_to_not_test_on = []
 only_these_users = []
+
+# dataset_name = 'assistment'
+# # data settings
+# target_col = 'correct'
+# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+# user_cols = ['user_id']
+# skip_cols = []
+# skip_cols = ['skill']
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.8
+# valid_frac = 0.1
+# h1_len = 20
+# h2_len = 5000
+# seeds = range(10)
+# inner_seeds = range(30)
+# weights_num = 30
+# weights_range = [0, 1]
+# sim_ann_var = 0.05
+# max_sim_ann_iter = -1
+# iters_to_cooling = 100
+# # model settings
+# max_depth = None
+# ccp_alphas = [0.004]
+# # ccp_alphas = [i / 1000 for i in range(1, 11)]
+# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# # best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
+# best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
+# # user settings
+# min_hist_len = 300
+# max_hist_len = 100000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
+
+# dataset_name = "mooc"
+# # data settings
+# target_col = 'Opinion(1/0)'
+# original_categ_cols = ['course_display_name', 'post_type', 'CourseType']
+# user_cols = ['forum_uid']
+# skip_cols = ['up_count', 'reads']
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.8
+# valid_frac = 0.1
+# h1_len = 50
+# h2_len = 5000
+# seeds = range(1)
+# inner_seeds = range(2)
+# weights_num = 3
+# weights_range = [0, 1]
+# sim_ann_var = 0.05
+# max_sim_ann_iter = -1
+# iters_to_cooling = 100
+# # model settings
+# max_depth = None
+# ccp_alphas = [0.00001]
+# # user settings
+# min_hist_len = 50
+# max_hist_len = 2000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
 
 # dataset_name = "recividism"
 # # data settings
@@ -151,30 +211,6 @@ only_these_users = []
 # h1_len = 50
 # h2_len = 5000
 # seeds = range(30)
-# weights_num = 10
-# weights_range = [0, 1]
-# # model settings
-# max_depth = None
-# ccp_alpha = 0.001
-# # user settings
-# min_hist_len = 50
-# max_hist_len = 2000
-# current_user_count = 0
-# users_to_not_test_on = []
-# only_these_users = []
-
-# dataset_name = "mooc"
-# # data settings
-# target_col = 'Opinion(1/0)'
-# original_categ_cols = ['course_display_name', 'post_type', 'CourseType']
-# user_cols = ['forum_uid']
-# skip_cols = ['up_count', 'reads']
-# df_max_size = 100000
-# # experiment settings
-# train_frac = 0.8
-# h1_len = 50
-# h2_len = 5000
-# seeds = range(10)
 # weights_num = 10
 # weights_range = [0, 1]
 # # model settings

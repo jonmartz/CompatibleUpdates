@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import auc
+import math
 
 
 def safe_make_dir(path):
@@ -29,48 +30,82 @@ def split_users(log_dir, log_set):
 
 def get_model_dict(cmap_name):
     models = {
-        'no diss': {'sample_weight': [1, 0, 1, 0], 'color': 'grey'},
-        'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'black'},
+        'no diss': {'sample_weight': [1, 0, 1, 0], 'color': 'grey', 'std': False},
+        'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'black', 'std': False},
         # 'sim_ann': {'sample_weight': [0.0, 0.6352, 0.3119, 0.0780], 'color': 'purple'},
-        'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'green'},
-        'best_u': {'sample_weight': ['', '', '', ''], 'color': 'red'},
+        'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'green', 'std': False},
+        'best_u': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': False},
         # SYNTHETIC:
-        'model1': {'sample_weight': ['', '', '', ''], 'color': 'red'},
-        'model2': {'sample_weight': ['', '', '', ''], 'color': 'blue'},
+        'model1': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': True},
+        'model2': {'sample_weight': ['', '', '', ''], 'color': 'blue', 'std': True},
     }
     parametrized_models = [  # [general_loss, general_diss, hist_loss, hist_diss]
-        ['L1', [0, 0, 1, 1]],
-        ['L2', [0, 1, 1, 0]],
-        ['L3', [0, 1, 1, 1]],
-        ['L4', [1, 0, 0, 1]],
-        ['L5', [1, 0, 1, 1]],
-        ['L6', [1, 1, 0, 1]],
-        ['L7', [1, 1, 1, 0]],
-        ['L8', [1, 1, 1, 1]],
+        ['L1', [0, 0, 1, 1], False],
+        ['L2', [0, 1, 1, 0], False],
+        ['L3', [0, 1, 1, 1], False],
+        ['L4', [1, 0, 0, 1], False],
+        ['L5', [1, 0, 1, 1], False],
+        ['L6', [1, 1, 0, 1], False],
+        ['L7', [1, 1, 1, 0], False],
+        ['L8', [1, 1, 1, 1], False],
     ]
     cmap = plt.cm.get_cmap(cmap_name)
     for i in range(len(parametrized_models)):
         model = parametrized_models[i]
-        models[model[0]] = {'sample_weight': model[1], 'color': cmap((i + 1) / (len(parametrized_models) + 3))}
+        models[model[0]] = {'sample_weight': model[1], 'color': cmap((i + 1) / (len(parametrized_models) + 3)),
+                            'std': model[2]}
     return models
 
 
+def get_df_by_weight_norm(df, model_y_init_avg_acc, model_y_final_avg_acc, weights, model_names):
+    user_groups = df.groupby('user')
+    df_dict = {'len': [], 'weight': []}
+    entry_len = None
+    for model_name in model_names:
+        df_dict['%s y' % model_name] = []
+    for user, user_group in user_groups:
+        user_len = user_group['len'].iloc[0]
+        seed_groups = user_group.groupby('seed')
+        if entry_len is None:
+            entry_len = len(seed_groups) * len(weights)
+        df_dict['len'].extend([user_len] * entry_len)
+        for seed, seed_group in seed_groups:
+            df_dict['weight'].extend(weights)
+            seed_means = seed_group.groupby('weight').mean()
+            # seed_h1_avg = seed_means['h1_acc'].iloc[0]
+            for model_name in model_names:
+                model_y = seed_means['%s y' % model_name]
+                # y_min = min(min(model_y), seed_h1_avg)
+                # y_max = max(max(model_y), seed_h1_avg)
+                # if y_max == y_min:
+                #     # if seed_h1_avg >= seed_no_hist_0_avg_acc or y_max == y_min:
+                #     continue
+                # model_y_norm = (model_y - model_y.iloc[0]) * ((no_hist_0_avg_acc[model_name] - h1_avg_acc) /
+                #                                               (y_max - y_min)) + no_hist_0_avg_acc[model_name]
+                # model_y_norm = (model_y - model_y.iloc[0]) * ((no_hist_init_avg_acc - no_hist_final_avg_acc) /
+                #                                               (y_max - y_min)) + no_hist_init_avg_acc
+                model_y_norm = (model_y - max(model_y)) * \
+                               ((model_y_init_avg_acc[model_name] - model_y_final_avg_acc[model_name]) /
+                                (max(model_y) - min(model_y))) + model_y_init_avg_acc[model_name]
+                df_dict['%s y' % model_name].extend(list(model_y_norm))
+
+    df_norm = pd.DataFrame(df_dict)
+    groups_by_weight = df_norm.groupby('weight')
+    return [groups_by_weight.get_group(i) for i in weights]
+
+
 def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_name='', show_tradeoff_plots=False,
-                 smooth_color_progression=False):
+                 smooth_color_progression=False, std_opacity=0.15):
     if user_name == '':
         df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
     else:
         df_results = pd.read_csv('%s\\logs\\%s_%s.csv' % (log_dir, log_set, user_name))
 
-    # skip_users = [
-    #     # 'Husband',
-    #     # 'Not-in-family',
-    #     # 'Own-child',
-    # ]
     # df_results = df_results[~df_results['user'].isin(skip_users)]
 
-    model_names = [i[:-2] for i in df_results.columns if ' x' in i]
+    model_names = [i[:-2] for i in df_results.columns if ' x' in i and i[:-2] in models.keys()]
     xs, ys, xs_plot, ys_plot = [], [], [], []
+    stds = {}
     autcs = []
     h1_avg_acc = np.average(df_results['h1_acc'], weights=df_results['len'])
     weights = pd.unique(df_results['weight'])
@@ -79,24 +114,38 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     fig, (ax, tabax) = plt.subplots(nrows=2, figsize=(6.4, 4.8 + 0.3 * len(model_names)))
     cmap = plt.cm.get_cmap('jet')
 
-    dfs_by_weight = [groups_by_weight.get_group(i) for i in weights]
+    df_by_weight = [groups_by_weight.get_group(i) for i in weights]
+    df_by_weight_norm = None
     for model_name in model_names:
-        if model_name not in models.keys():
-            continue
-        x = [np.average(i['%s x' % model_name], weights=i['len']) for i in dfs_by_weight]
-        y = [np.average(i['%s y' % model_name], weights=i['len']) for i in dfs_by_weight]
+        # if model_name not in models.keys():
+        #     continue
+        x = [np.average(i['%s x' % model_name], weights=i['len']) for i in df_by_weight]
+        y = [np.average(i['%s y' % model_name], weights=i['len']) for i in df_by_weight]
 
-        # make x monotonic for AUTC
-        # x_monotonic = x.copy()
-        # for i in range(1, len(x_monotonic)):
-        #     if x_monotonic[i] < x_monotonic[i - 1]:
-        #         x_monotonic[i] = x_monotonic[i - 1]
-        # h1_area = (x_monotonic[-1] - x_monotonic[0]) * h1_avg_acc
-        # autc = auc(x_monotonic, y) - h1_area
-
-        # for i in range(1, len(x)):
-        #     if x[i] < x[i - 1]:
-        #         x[i] = x[i - 1]
+        plot_std = models[model_name]['std']
+        if plot_std:
+            if df_by_weight_norm is None:
+                # no_hist_init_avg_acc = np.average(df_by_weight[0]['no hist y'], weights=df_by_weight[0]['len'])
+                # no_hist_final_avg_acc = np.average(df_by_weight[-1]['no hist y'], weights=df_by_weight[0]['len'])
+                # df_by_weight_norm = get_df_by_weight_norm(df_results.drop(columns=['%s x' % i for i in model_names]),
+                #                                           no_hist_init_avg_acc, no_hist_final_avg_acc,
+                #                                           weights, model_names)
+                model_y_init_avg_acc = {
+                    i: np.average(df_by_weight[0]['%s y' % i], weights=df_by_weight[0]['len'])
+                    for i in model_names
+                }
+                model_y_final_avg_acc = {
+                    i: np.average(df_by_weight[-1]['%s y' % i], weights=df_by_weight[-1]['len'])
+                    for i in model_names
+                }
+                df_by_weight_norm = get_df_by_weight_norm(df_results.drop(columns=['%s x' % i for i in model_names]),
+                                                          model_y_init_avg_acc, model_y_final_avg_acc,
+                                                          weights, model_names)
+            var = [np.average((df_by_weight_norm[i]['%s y' % model_name] - y[i]) ** 2,
+                              weights=df_by_weight_norm[i]['len']) for i in range(len(weights))]
+            # std_0 = math.sqrt(var[0])
+            # std = [math.sqrt(i) - std_0 for i in var]
+            std = [math.sqrt(i) for i in var]
 
         h1_area = (x[-1] - x[0]) * h1_avg_acc
         autc = auc(x, y) - h1_area
@@ -113,9 +162,14 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
             y_binned = np.mean(np.array(y[1:last_idx]).reshape(-1, bin_size), axis=1)
             xs_plot.append([x[0]] + list(x_binned) + [np.mean(x[last_idx:-1]), x[-1]])
             ys_plot.append([y[0]] + list(y_binned) + [np.mean(y[last_idx:-1]), y[-1]])
+            if plot_std:
+                std_binned = np.mean(np.array(std[1:last_idx]).reshape(-1, bin_size), axis=1)
+                stds[model_name] = [std[0]] + list(std_binned) + [np.mean(std[last_idx:-1]), std[-1]]
         else:
             xs_plot.append(x)
             ys_plot.append(y)
+            if plot_std:
+                stds[model_name] = std
 
     min_x = xs[0][0]
     max_x = xs[0][-1]
@@ -136,8 +190,8 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     # best_autc = None
     for i in range(len(model_names)):
         model_name = model_names[i]
-        if model_name not in models.keys():
-            continue
+        # if model_name not in models.keys():
+        #     continue
         x = xs[i]
         y = ys[i]
         autc = autcs[i]
@@ -184,12 +238,20 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
         else:
             # ax.plot(x_plot, y_plot, label=model_name, color=color, marker='.')
             ax.plot(x_plot, y_plot, label=model_name, color=color)
+            if model['std']:
+                y = np.array(y_plot)
+                s = np.array(stds[model_name])
+                ax.fill_between(x_plot, y + s, y - s, facecolor=color, alpha=std_opacity)
         if model_name == 'no hist':
             color = 'white'
         colors.append(color)
     if 'best_u' in model_names:
         # ax.plot(x_best, y_best, label='best_u', color=best_color, marker='.')
         ax.plot(x_best, y_best, label='best_u', color=best_color)
+        if models['best_u']['std']:
+            y = np.array(y_best)
+            s = np.array(stds['best_u'])
+            ax.fill_between(x_best, y + s, y - s, facecolor=best_color, alpha=std_opacity)
 
     # table
     columns = ('gen', 'gen diss', 'hist', 'hist diss', '+ AUTC %')
@@ -554,10 +616,17 @@ def best_count_values(log_dir, log_set):
     df_result.to_csv('%s\\best_models_%s_counts.csv' % (log_dir, log_set), index=False)
 
 
-dataset = 'assistment'
-version = 'unbalanced\\inner seeds'
-user_type = 'user_id'
+dataset = 'ednet'
+version = 'unbalanced\\1'
+user_type = 'user'
 model_type = 'simulated annealing'
+bin_size = 10
+
+# dataset = 'assistment'
+# version = 'unbalanced\\inner seeds'
+# user_type = 'user_id'
+# model_type = 'simulated annealing'
+# bin_size = 10
 
 # dataset = 'salaries'
 # version = 'unbalanced\\inner seeds'
@@ -587,8 +656,8 @@ make_summary = False
 # binarize_by_compat = True
 
 # print('phase 2 - get best_u for each user using binarized validation results')
-# # log_set = 'valid_bins'
-# log_set = 'test_bins_with_best'
+# log_set = 'valid_bins'
+# # log_set = 'test_bins_with_best'
 # individual_users = True
 # get_best = True
 
@@ -612,18 +681,17 @@ log_set = 'test_bins_with_best'
 make_summary = True
 individual_users = True
 
-# print('custom phase 1')
+# print('phase 1 - for synthetic')
 # log_set = 'valid_bins'
 # individual_users = True
 # get_best = True
 
-# print('custom phase 2')
+# print('phase 2 - for synthetic')
 # # log_set = 'valid'
 # log_set = 'valid_bins'
 
 # default
 test_set = 'test_bins'
-bin_size = 10
 count_best = False
 
 results_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\results\\%s' % model_type

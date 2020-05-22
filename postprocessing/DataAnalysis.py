@@ -16,17 +16,24 @@ def get_feat_importance(x, y):
     return feat_importance, accuracy
 
 
-dataset = 'assistment'
-target_col = 'correct'
-user_col = 'user_id'
-cache = 'user_id skip_skill max_len_100000 min_hist_300 max_hist_100000 chrono_False balance_False'
+# dataset = 'assistment'
+# target_col = 'correct'
+# user_col = 'user_id'
+# cache = 'user_id skip_skill max_len_100000 min_hist_300 max_hist_100000 chrono_False balance_False'
+# # ccp_alpha = 0.004
+
+dataset = 'ednet'
+target_col = 'correct_answer'
+user_col = 'user'
+cache = 'user skip_ max_len_100000 min_hist_0 max_hist_100000 chrono_False balance_False'
 # ccp_alpha = 0.004
 
 dataset_dir = 'C:\\Users\\Jonathan\\Documents\\BGU\\Research\\Thesis\\DataSets\\%s\\caches\\%s' % (dataset, cache)
 dataset_path = '%s\\0.csv' % dataset_dir
 df = pd.read_csv(dataset_path)
 
-cols = list(df.drop(columns=[user_col]).columns)
+cols = list(df.drop(columns=[user_col, target_col]).columns) + [target_col]
+df = df[[user_col] + cols]
 
 scaler = MinMaxScaler()
 labelizer = LabelBinarizer()
@@ -72,4 +79,5 @@ pd.DataFrame(df_dict).to_csv('%s\\wasserstein_distances.csv' % dataset_dir, inde
 df_dict = {'user': ['general'] + users}
 for i in range(len(cols_no_target)):
     df_dict[cols_no_target[i]] = feat_importances[i]
+df_dict[target_col] = [1] * (len(users) + 1)
 pd.DataFrame(df_dict).to_csv('%s\\feature_importances.csv' % dataset_dir, index=False)
