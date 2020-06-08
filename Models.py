@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import roc_auc_score
 
 
 class History:
@@ -74,13 +75,15 @@ class History:
 
 class DecisionTree:
 
-    def __init__(self, x_train, y_train, model_name, ccp_alpha, max_depth=None,
+    def __init__(self, x_train, y_train, model_name, ccp_alpha, metrics, max_depth=None,
                  old_model=None, diss_weight=None, hist=None):
         self.model_name = model_name
         self.ccp_alpha = ccp_alpha
         self.old_model = old_model
         self.diss_weight = diss_weight
         self.hist = hist
+        self.metrics = metrics
+
         self.tree = DecisionTreeRegressor(max_depth=max_depth, random_state=1, ccp_alpha=ccp_alpha)
         sample_weight = self.get_sample_weight(x_train, y_train)
         self.tree.fit(x_train, y_train, sample_weight=sample_weight)
@@ -152,25 +155,31 @@ class DecisionTree:
         if 'adaboost' not in self.model_name:
             new_predicted = np.round(new_predicted_prob)
             new_correct = np.equal(new_predicted, y).astype(int)
-            accuracy = np.mean(new_correct)
+            performance = {}
+            if 'acc' in self.metrics:
+                performance['acc'] = np.mean(new_correct)
+            elif 'auc' in self.metrics:
+                performance['auc'] = roc_auc_score(y, new_predicted_prob)
             if old_model is None:  # testing pre-update model
-                # return sklearn.metrics.roc_auc_score(y, new_output)
-                return {'auc': accuracy, 'predicted': new_predicted}
+                return {'performance': performance, 'predicted': new_predicted}
 
         old_predicted_prob = old_model.predict(x)
         old_correct = np.equal(np.round(old_predicted_prob), y).astype(int)
 
         if 'adaboost' in self.model_name:
             # normalize output to the range [-0.5, 0.5]
-            new_predicted = old_model.ensemble_weight * (old_predicted_prob - 0.5) \
+            new_predicted_prob = old_model.ensemble_weight * (old_predicted_prob - 0.5) \
                             + self.ensemble_weight * (new_predicted_prob - 0.5)
             # translate sign into a prediction of either 0 or 1
-            new_predicted = np.greater(new_predicted, 0).astype(int)
+            new_predicted = np.greater(new_predicted_prob, 0).astype(int)
             new_correct = np.equal(new_predicted, y).astype(int)
-            accuracy = np.mean(new_correct)
-
+            performance = {}
+            if 'acc' in self.metrics:
+                performance['acc'] = np.mean(new_correct)
+            elif 'auc' in self.metrics:
+                performance['auc'] = roc_auc_score(y, 1 + new_predicted_prob)
         compatibility = np.sum(old_correct * new_correct) / np.sum(old_correct)
-        return {'compatibility': compatibility, 'auc': accuracy, 'predicted': new_predicted}
+        return {'compatibility': compatibility, 'performance': performance, 'predicted': new_predicted}
 
     def set_hybrid_test(self, hist, x_test):
 
@@ -198,20 +207,22 @@ class DecisionTree:
         predicted = np.round(hybrid_output)
         hybrid_correct = np.equal(predicted, y).astype(int)
         old_correct = np.equal(np.round(self.hybrid_old_predicted), y).astype(int)
-        accuracy = np.mean(hybrid_correct)
+        performance = {}
+        if 'acc' in self.metrics:
+            performance['acc'] = np.mean(hybrid_correct)
+        elif 'auc' in self.metrics:
+            performance['auc'] = roc_auc_score(y, hybrid_output)
         compatibility = np.sum(old_correct * hybrid_correct) / np.sum(old_correct)
-
-        return {'compatibility': compatibility, 'auc': accuracy, 'predicted': predicted}
+        return {'compatibility': compatibility, 'performance': performance, 'predicted': predicted}
 
 
 class ParametrizedTree(DecisionTree):
 
-    def __init__(self, x_train, y_train, ccp_alpha, sample_weight_params, max_depth=None,
-                 old_model=None, diss_weight=None, hist=None):
+    def __init__(self, x_train, y_train, ccp_alpha, sample_weight_params, metrics,
+                 max_depth=None, old_model=None, diss_weight=None, hist=None):
         self.sample_weight_params = sample_weight_params
         model_name = '%.4f %.4f %.4f %.4f' % tuple(sample_weight_params)
-        super().__init__(x_train, y_train, model_name, ccp_alpha, max_depth, old_model, diss_weight,
-                         hist)
+        super().__init__(x_train, y_train, model_name, ccp_alpha, metrics, max_depth, old_model, diss_weight, hist)
 
     def get_sample_weight(self, x, y):
         diss_w = self.diss_weight

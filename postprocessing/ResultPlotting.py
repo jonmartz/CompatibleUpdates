@@ -33,7 +33,7 @@ def get_model_dict(cmap_name):
         'no diss': {'sample_weight': [1, 0, 1, 0], 'color': 'grey', 'std': False},
         'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'black', 'std': False},
         # 'sim_ann': {'sample_weight': [0.0, 0.6352, 0.3119, 0.0780], 'color': 'purple'},
-        'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'green', 'std': False},
+        # 'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'green', 'std': False},
         'best_u': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': False},
         # SYNTHETIC:
         'model1': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': True},
@@ -84,6 +84,8 @@ def get_df_by_weight_norm(df, model_y_init_avg_acc, model_y_final_avg_acc, weigh
                 #                                               (y_max - y_min)) + no_hist_0_avg_acc[model_name]
                 # model_y_norm = (model_y - model_y.iloc[0]) * ((no_hist_init_avg_acc - no_hist_final_avg_acc) /
                 #                                               (y_max - y_min)) + no_hist_init_avg_acc
+                if max(model_y) == min(model_y):
+                    print('max(y) = min(y)')
                 model_y_norm = (model_y - max(model_y)) * \
                                ((model_y_init_avg_acc[model_name] - model_y_final_avg_acc[model_name]) /
                                 (max(model_y) - min(model_y))) + model_y_init_avg_acc[model_name]
@@ -95,7 +97,7 @@ def get_df_by_weight_norm(df, model_y_init_avg_acc, model_y_final_avg_acc, weigh
 
 
 def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_name='', show_tradeoff_plots=False,
-                 smooth_color_progression=False, std_opacity=0.15):
+                 smooth_color_progression=False, std_opacity=0.15, performance_metric='accuracy'):
     if user_name == '':
         df_results = pd.read_csv('%s\\%s_log.csv' % (log_dir, log_set))
     else:
@@ -138,7 +140,8 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
                     i: np.average(df_by_weight[-1]['%s y' % i], weights=df_by_weight[-1]['len'])
                     for i in model_names
                 }
-                df_by_weight_norm = get_df_by_weight_norm(df_results.drop(columns=['%s x' % i for i in model_names]),
+                model_names_for_std = [i for i in model_names if models[i]['std']]
+                df_by_weight_norm = get_df_by_weight_norm(df_results.drop(columns=['%s x' % i for i in model_names_for_std]),
                                                           model_y_init_avg_acc, model_y_final_avg_acc,
                                                           weights, model_names)
             var = [np.average((df_by_weight_norm[i]['%s y' % model_name] - y[i]) ** 2,
@@ -178,13 +181,6 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     h1_x = [min_x, max_x]
     h1_y = [h1_avg_acc, h1_avg_acc]
     ax.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
-
-    # adding area on left to no hist for correct autc improvement calculation
-    # x_no_hist_ = xs[0]
-    # y_no_hist_ = ys[0]
-    # min_x_no_hist_ = min(x_no_hist_)
-    # if min_x_no_hist_ > min_x:  # for models that start at better compatibility
-    #     no_hist_autc += (min_x_no_hist_ - min_x) * (y_no_hist_[0] - h1_avg_acc)
 
     autc_improvs = []
     # best_autc = None
@@ -259,7 +255,7 @@ def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_
     tabax.table(cellText=cell_text, rowLabels=model_names_sorted, rowColours=colors, colLabels=columns, loc='center')
 
     ax.set_xlabel('compatibility')
-    ax.set_ylabel('accuracy')
+    ax.set_ylabel(performance_metric)
     if user_name == '':
         title = 'dataset=%s user_type=%s' % (dataset, user_type)
         save_name = '%s\\%s_plots.png' % (log_dir, log_set)
@@ -616,11 +612,11 @@ def best_count_values(log_dir, log_set):
     df_result.to_csv('%s\\best_models_%s_counts.csv' % (log_dir, log_set), index=False)
 
 
-dataset = 'ednet'
-version = 'unbalanced\\1'
-user_type = 'user'
-model_type = 'simulated annealing'
-bin_size = 10
+# dataset = 'ednet'
+# version = 'unbalanced\\auc'
+# user_type = 'user'
+# model_type = 'simulated annealing'
+# bin_size = 10
 
 # dataset = 'assistment'
 # version = 'unbalanced\\inner seeds'
@@ -632,11 +628,13 @@ bin_size = 10
 # version = 'unbalanced\\inner seeds'
 # user_type = 'relationship'
 # model_type = 'simulated annealing'
+# bin_size = 10
 
-# dataset = 'recividism'
-# version = 'unbalanced\\1'
-# user_type = 'race'
-# model_type = 'simulated annealing'
+dataset = 'recividism'
+version = 'unbalanced\\1'
+user_type = 'race'
+model_type = 'simulated annealing'
+bin_size = 10
 
 # dataset = 'averaging tradeoffs'
 # version = 'showing importance of binarization'
@@ -669,17 +667,17 @@ make_summary = False
 # log_set = 'valid_bins'
 # add_best = True
 
-# print('phase 5 - generate averaged plots for test results')
-# log_set = 'test_bins_with_best'
+print('phase 5 - generate averaged plots for test results')
+log_set = 'test_bins_with_best'
 
 # print('phase 6 - generate individual user plots for test results')
 # log_set = 'test_bins_with_best'
 # individual_users = True
 
-print('phase 7 - create test summary')
-log_set = 'test_bins_with_best'
-make_summary = True
-individual_users = True
+# print('phase 7 - create test summary')
+# log_set = 'test_bins_with_best'
+# make_summary = True
+# individual_users = True
 
 # print('phase 1 - for synthetic')
 # log_set = 'valid_bins'

@@ -31,12 +31,49 @@ def min_and_max(x):
 
 # Data-set paths
 
-dataset_name = 'ednet'
+# dataset_name = 'ednet'
+# # data settings
+# target_col = 'correct_answer'
+# original_categ_cols = ['source', 'platform']
+# user_cols = ['user']
+# skip_cols = []
+# df_max_size = 100000
+# # experiment settings
+# train_frac = 0.7
+# valid_frac = 0.2
+# h1_len = 20
+# h2_len = 5000
+# # seeds = range(2)
+# # inner_seeds = range(3)
+# # weights_num = 5
+# seeds = range(10)
+# inner_seeds = range(10)
+# weights_num = 30
+# weights_range = [0, 1]
+# sim_ann_var = 0.05
+# max_sim_ann_iter = -1
+# iters_to_cooling = 100
+# # model settings
+# max_depth = None
+# # ccp_alphas = [0.009]
+# ccp_alphas = [0.003]
+# # ccp_alphas = [i / 10000 for i in range(1, 10)]
+# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
+# best_sample_weight = [0, 0, 0, 0]
+# # user settings
+# min_hist_len = 0
+# max_hist_len = 100000
+# current_user_count = 0
+# users_to_not_test_on = []
+# only_these_users = []
+
+dataset_name = 'assistment'
 # data settings
-target_col = 'correct_answer'
-original_categ_cols = ['source', 'platform']
-user_cols = ['user']
-skip_cols = []
+target_col = 'correct'
+original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+user_cols = ['user_id']
+# skip_cols = []
+skip_cols = ['skill']
 df_max_size = 100000
 # experiment settings
 train_frac = 0.8
@@ -52,49 +89,17 @@ max_sim_ann_iter = -1
 iters_to_cooling = 100
 # model settings
 max_depth = None
-ccp_alphas = [0.009]
+ccp_alphas = [0.004]
+# ccp_alphas = [i / 1000 for i in range(1, 11)]
 sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-best_sample_weight = [0, 0, 0, 0]
+# best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
+best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
 # user settings
-min_hist_len = 0
+min_hist_len = 300
 max_hist_len = 100000
 current_user_count = 0
 users_to_not_test_on = []
 only_these_users = []
-
-# dataset_name = 'assistment'
-# # data settings
-# target_col = 'correct'
-# original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-# user_cols = ['user_id']
-# skip_cols = []
-# skip_cols = ['skill']
-# df_max_size = 100000
-# # experiment settings
-# train_frac = 0.8
-# valid_frac = 0.1
-# h1_len = 20
-# h2_len = 5000
-# seeds = range(10)
-# inner_seeds = range(30)
-# weights_num = 30
-# weights_range = [0, 1]
-# sim_ann_var = 0.05
-# max_sim_ann_iter = -1
-# iters_to_cooling = 100
-# # model settings
-# max_depth = None
-# ccp_alphas = [0.004]
-# # ccp_alphas = [i / 1000 for i in range(1, 11)]
-# sample_weights_factor = [0.0, 1.0, 1.0, 1.0]
-# # best_sample_weight = [0.01171477, 0.04833975, 0.699829795, 0.550231695]
-# best_sample_weight = [0.0, 0.6352316047435935, 0.3119101971209735, 0.07805665820394585]
-# # user settings
-# min_hist_len = 300
-# max_hist_len = 100000
-# current_user_count = 0
-# users_to_not_test_on = []
-# only_these_users = []
 
 # dataset_name = "mooc"
 # # data settings
@@ -301,6 +306,8 @@ chrono_split = False
 balance_histories = False
 
 # output settings
+# metric = 'acc'
+metrics = ['acc', 'auc']
 make_tradeoff_plots = False
 show_tradeoff_plots = False
 sound_at_new_best = True
@@ -472,8 +479,6 @@ for user_col in user_cols:
         del hists
     # end of making seed caches
 
-
-
     # lists indexed by seed containing dicts:
     hist_train_ranges_by_seed = []
     hist_trains_by_seed = []
@@ -607,14 +612,15 @@ for user_col in user_cols:
                 Y_trains_by_inner_seed.append(Y_train)
 
                 # train h1
-                h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, max_depth=max_depth)
+                h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, metrics,
+                                         max_depth=max_depth)
                 h1_by_inner_seed.append(h1)
 
                 if no_hists_by_seed is not None:
                     # train no hists
                     no_hists_by_weight = []
                     for weight in diss_weights:
-                        no_hist = Models.ParametrizedTree(X_train, Y_train, ccp_alpha, [1, 1, 0, 0],
+                        no_hist = Models.ParametrizedTree(X_train, Y_train, ccp_alpha, [1, 1, 0, 0], metrics,
                                                           max_depth=max_depth, old_model=h1, diss_weight=weight)
                         no_hists_by_weight.append(no_hist)
                     no_hists_by_inner_seed.append(no_hists_by_weight)
@@ -814,7 +820,7 @@ for user_col in user_cols:
                                                                in no_hists_by_inner_seed]
                             else:
                                 no_hist_valid_by_inner_seed = [
-                                    Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
+                                    Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, metrics, max_depth=max_depth,
                                                         old_model=h1, diss_weight=0)
                                     for X_train, Y_train in zip(X_train_by_inner_seed, Y_train_by_inner_seed)
                                 ]
@@ -825,7 +831,7 @@ for user_col in user_cols:
                                 no_hist_valid.set_hybrid_test(hist, hist_valid_x)
 
                             no_hist_test_by_inner_seed = [
-                                Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
+                                Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, metrics, max_depth=max_depth,
                                                     old_model=h1, diss_weight=0)
                                 for X_train, Y_train, h1
                                 in zip(X_train_by_inner_seed, Y_train_by_inner_seed, h1_by_inner_seed)
@@ -858,8 +864,8 @@ for user_col in user_cols:
                             else:
                                 h2_by_inner_seed = [
                                     Models.ParametrizedTree(
-                                        X_train, Y_train, ccp_alpha, sample_weight_cand,
-                                        max_depth=max_depth, old_model=h1, diss_weight=weight, hist=hist)
+                                        X_train, Y_train, ccp_alpha, sample_weight_cand, metrics, max_depth=max_depth,
+                                        old_model=h1, diss_weight=weight, hist=hist)
                                     for X_train, Y_train, h1, hist
                                     in zip(X_train_by_inner_seed, Y_train_by_inner_seed,
                                            h1_by_inner_seed, hist_by_inner_seed)]
