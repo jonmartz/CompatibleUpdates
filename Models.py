@@ -75,14 +75,13 @@ class History:
 
 class DecisionTree:
 
-    def __init__(self, x_train, y_train, model_name, ccp_alpha, metrics, max_depth=None,
+    def __init__(self, x_train, y_train, model_name, ccp_alpha, max_depth=None,
                  old_model=None, diss_weight=None, hist=None):
         self.model_name = model_name
         self.ccp_alpha = ccp_alpha
         self.old_model = old_model
         self.diss_weight = diss_weight
         self.hist = hist
-        self.metrics = metrics
 
         self.tree = DecisionTreeRegressor(max_depth=max_depth, random_state=1, ccp_alpha=ccp_alpha)
         sample_weight = self.get_sample_weight(x_train, y_train)
@@ -148,20 +147,19 @@ class DecisionTree:
     def predict(self, x):
         return self.tree.predict(x).reshape(len(x), 1)
 
-    def test(self, x, y, old_model=None):
+    def test(self, x, y, metric, old_model=None):
 
         new_predicted_prob = self.predict(x)
 
         if 'adaboost' not in self.model_name:
             new_predicted = np.round(new_predicted_prob)
             new_correct = np.equal(new_predicted, y).astype(int)
-            performance = {}
-            if 'acc' in self.metrics:
-                performance['acc'] = np.mean(new_correct)
-            elif 'auc' in self.metrics:
-                performance['auc'] = roc_auc_score(y, new_predicted_prob)
+            if metric == 'acc':
+                accuracy = np.mean(new_correct)
+            elif metric == 'auc':
+                accuracy = roc_auc_score(y, new_predicted_prob)
             if old_model is None:  # testing pre-update model
-                return {'performance': performance, 'predicted': new_predicted}
+                return {'y': accuracy, 'predicted': new_predicted}
 
         old_predicted_prob = old_model.predict(x)
         old_correct = np.equal(np.round(old_predicted_prob), y).astype(int)
@@ -173,56 +171,55 @@ class DecisionTree:
             # translate sign into a prediction of either 0 or 1
             new_predicted = np.greater(new_predicted_prob, 0).astype(int)
             new_correct = np.equal(new_predicted, y).astype(int)
-            performance = {}
-            if 'acc' in self.metrics:
-                performance['acc'] = np.mean(new_correct)
-            elif 'auc' in self.metrics:
-                performance['auc'] = roc_auc_score(y, 1 + new_predicted_prob)
+            if metric == 'acc':
+                accuracy = np.mean(new_correct)
+            elif metric == 'auc':
+                accuracy = roc_auc_score(y, 1 + new_predicted_prob)
+
         compatibility = np.sum(old_correct * new_correct) / np.sum(old_correct)
-        return {'compatibility': compatibility, 'performance': performance, 'predicted': new_predicted}
+        return {'x': compatibility, 'y': accuracy, 'predicted': new_predicted}
 
-    def set_hybrid_test(self, hist, x_test):
+    # def set_hybrid_test(self, hist, x_test):
+    #
+    #     x_train = hist.x_train
+    #     y_train = hist.y_train
+    #     old_predicted = self.old_model.predict(x_train)
+    #     old_correct = np.equal(np.round(old_predicted), y_train)
+    #     new_predicted = self.predict(x_train)
+    #     new_incorrect = np.not_equal(np.round(new_predicted), y_train)
+    #
+    #     y_diss = (old_correct * new_incorrect).astype(int)
+    #     version_chooser = DecisionTree(x_train, y_diss, 'version chooser', self.ccp_alpha)
+    #
+    #     self.dissonant_likelihood = version_chooser.predict(x_test)
+    #     self.dissonant_likelihood_mean = self.dissonant_likelihood.mean()
+    #     self.dissonant_likelihood_std = self.dissonant_likelihood.std()
+    #     self.hybrid_old_predicted = self.old_model.predict(x_test)
+    #     self.hybrid_new_predicted = self.predict(x_test)
 
-        x_train = hist.x_train
-        y_train = hist.y_train
-        old_predicted = self.old_model.predict(x_train)
-        old_correct = np.equal(np.round(old_predicted), y_train)
-        new_predicted = self.predict(x_train)
-        new_incorrect = np.not_equal(np.round(new_predicted), y_train)
-
-        y_diss = (old_correct * new_incorrect).astype(int)
-        version_chooser = DecisionTree(x_train, y_diss, 'version chooser', self.ccp_alpha)
-
-        self.dissonant_likelihood = version_chooser.predict(x_test)
-        self.dissonant_likelihood_mean = self.dissonant_likelihood.mean()
-        self.dissonant_likelihood_std = self.dissonant_likelihood.std()
-        self.hybrid_old_predicted = self.old_model.predict(x_test)
-        self.hybrid_new_predicted = self.predict(x_test)
-
-    def hybrid_test(self, y, std_offset):
-        # get accuracy and compatibility
-        likelihood = self.dissonant_likelihood
-        threshold = self.dissonant_likelihood_mean + self.dissonant_likelihood_std * std_offset
-        hybrid_output = np.where(likelihood < threshold, self.hybrid_new_predicted, self.hybrid_old_predicted)
-        predicted = np.round(hybrid_output)
-        hybrid_correct = np.equal(predicted, y).astype(int)
-        old_correct = np.equal(np.round(self.hybrid_old_predicted), y).astype(int)
-        performance = {}
-        if 'acc' in self.metrics:
-            performance['acc'] = np.mean(hybrid_correct)
-        elif 'auc' in self.metrics:
-            performance['auc'] = roc_auc_score(y, hybrid_output)
-        compatibility = np.sum(old_correct * hybrid_correct) / np.sum(old_correct)
-        return {'compatibility': compatibility, 'performance': performance, 'predicted': predicted}
+    # def hybrid_test(self, y, std_offset):
+    #     # get accuracy and compatibility
+    #     likelihood = self.dissonant_likelihood
+    #     threshold = self.dissonant_likelihood_mean + self.dissonant_likelihood_std * std_offset
+    #     hybrid_output = np.where(likelihood < threshold, self.hybrid_new_predicted, self.hybrid_old_predicted)
+    #     predicted = np.round(hybrid_output)
+    #     hybrid_correct = np.equal(predicted, y).astype(int)
+    #     old_correct = np.equal(np.round(self.hybrid_old_predicted), y).astype(int)
+    #     if metric == 'acc':
+    #         accuracy = np.mean(hybrid_correct)
+    #     elif metric == 'auc':
+    #         accuracy = roc_auc_score(y, hybrid_output)
+    #     compatibility = np.sum(old_correct * hybrid_correct) / np.sum(old_correct)
+    #     return {'x': compatibility, 'y': accuracy, 'predicted': predicted}
 
 
 class ParametrizedTree(DecisionTree):
 
-    def __init__(self, x_train, y_train, ccp_alpha, sample_weight_params, metrics,
-                 max_depth=None, old_model=None, diss_weight=None, hist=None):
+    def __init__(self, x_train, y_train, ccp_alpha, sample_weight_params, max_depth=None,
+                 old_model=None, diss_weight=None, hist=None):
         self.sample_weight_params = sample_weight_params
         model_name = '%.4f %.4f %.4f %.4f' % tuple(sample_weight_params)
-        super().__init__(x_train, y_train, model_name, ccp_alpha, metrics, max_depth, old_model, diss_weight, hist)
+        super().__init__(x_train, y_train, model_name, ccp_alpha, max_depth, old_model, diss_weight, hist)
 
     def get_sample_weight(self, x, y):
         diss_w = self.diss_weight
