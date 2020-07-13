@@ -653,8 +653,8 @@ for user_col in user_cols:
                 Y_trains_by_inner_seed.append(Y_train)
 
                 # train h1
-                h1 = Models.DecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, max_depth=max_depth,
-                                         metric=metric)
+                h1 = Models.CompatibleRegressionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, max_depth=max_depth,
+                                                     metric=metric)
                 h1_by_inner_seed.append(h1)
 
                 if no_hists_by_seed is not None:
@@ -862,8 +862,8 @@ for user_col in user_cols:
                                                                in no_hists_by_inner_seed]
                             else:
                                 no_hist_valid_by_inner_seed = [
-                                    Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
-                                                        old_model=h1, diss_weight=0, metric=metric)
+                                    Models.CompatibleRegressionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
+                                                                    old_model=h1, diss_weight=0, metric=metric)
                                     for X_train, Y_train in zip(X_train_by_inner_seed, Y_train_by_inner_seed)
                                 ]
                             # todo: copied cached no hists
@@ -873,8 +873,8 @@ for user_col in user_cols:
                                 no_hist_valid.set_hybrid_test(hist, hist_valid_x)
 
                             no_hist_test_by_inner_seed = [
-                                Models.DecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
-                                                    old_model=h1, diss_weight=0, metric=metric)
+                                Models.CompatibleRegressionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
+                                                                old_model=h1, diss_weight=0, metric=metric)
                                 for X_train, Y_train, h1
                                 in zip(X_train_by_inner_seed, Y_train_by_inner_seed, h1_by_inner_seed)
                             ]
