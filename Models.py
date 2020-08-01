@@ -5,16 +5,16 @@ from sklearn.metrics import roc_auc_score
 
 
 def get_model(model_type, x_train, y_train, model_name='None', subset_weights=None, old_model=None, diss_weight=None,
-              hist=None, ccp_alpha=None, max_depth=None, ridge_alpha=None):
+              hist_range=None, ccp_alpha=None, max_depth=None, ridge_alpha=None):
     if model_type == 'tree':
         return CompatibleRegressionTree(x_train, y_train, ccp_alpha, model_name, subset_weights, max_depth,
-                                        old_model, diss_weight, hist)
+                                        old_model, diss_weight, hist_range)
     elif model_type == 'ridge':
-        return CompatibleRidge(x_train, y_train, model_name, subset_weights, old_model, diss_weight, hist, ridge_alpha)
+        return CompatibleRidge(x_train, y_train, model_name, subset_weights, old_model, diss_weight, hist_range, ridge_alpha)
 
 
 class Model:
-    def __init__(self, model_name=None, old_model=None, diss_weight=None, subset_weights=None, hist=None):
+    def __init__(self, model_name=None, old_model=None, diss_weight=None, subset_weights=None, hist_range=None):
         if model_name == 'None' and subset_weights is not None:
             self.model_name = '%.4f %.4f %.4f %.4f' % tuple(subset_weights)
         else:
@@ -22,7 +22,7 @@ class Model:
         self.subset_weights = subset_weights
         self.old_model = old_model
         self.diss_weight = diss_weight
-        self.hist = hist
+        self.hist_range = hist_range
         self.predictor = None
 
     def get_sample_weights(self, x, y, scale=10):
@@ -40,9 +40,8 @@ class Model:
             gen = (1 - diss_weight) * general_loss
             diss = diss_weight * old_correct * general_diss
         else:
-            hist_range = self.hist.range
-            gen = (1 - diss_weight) * (general_loss + hist_loss * hist_range)
-            diss = diss_weight * old_correct * (general_diss + hist_diss * hist_range)
+            gen = (1 - diss_weight) * (general_loss + hist_loss * self.hist_range)
+            diss = diss_weight * old_correct * (general_diss + hist_diss * self.hist_range)
         sample_weight = gen + diss
         return sample_weight * scale
 
@@ -71,8 +70,8 @@ class Model:
 
 class CompatibleRegressionTree(Model):
     def __init__(self, x_train, y_train, ccp_alpha, model_name='None', subset_weights=None, max_depth=None,
-                 old_model=None, diss_weight=None, hist=None):
-        super().__init__(model_name, old_model, diss_weight, subset_weights, hist)
+                 old_model=None, diss_weight=None, hist_range=None):
+        super().__init__(model_name, old_model, diss_weight, subset_weights, hist_range)
         self.ccp_alpha = ccp_alpha
         self.predictor = DecisionTreeRegressor(max_depth=max_depth, random_state=1, ccp_alpha=ccp_alpha)
         self.predictor.fit(x_train, y_train, sample_weight=self.get_sample_weights(x_train, y_train))
@@ -80,20 +79,7 @@ class CompatibleRegressionTree(Model):
 
 class CompatibleRidge(Model):
     def __init__(self, x_train, y_train, model_name='None', subset_weights=None,
-                 old_model=None, diss_weight=None, hist=None, ridge_alpha=1.0):
-        super().__init__(model_name, old_model, diss_weight, subset_weights, hist)
+                 old_model=None, diss_weight=None, hist_range=None, ridge_alpha=1.0):
+        super().__init__(model_name, old_model, diss_weight, subset_weights, hist_range)
         self.predictor = Ridge(alpha=ridge_alpha, random_state=1)
         self.predictor.fit(x_train, y_train, sample_weight=self.get_sample_weights(x_train, y_train))
-
-
-class History:
-
-    def __init__(self, x_train, y_train):
-        self.x_train = x_train
-        self.y_train = y_train
-        self.range = 0
-
-    def set_range(self, hist_range, h2_train_len):
-        self.range = np.zeros(h2_train_len)
-        for i in range(hist_range[0], hist_range[1]):
-            self.range[i] = 1

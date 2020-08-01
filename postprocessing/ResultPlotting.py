@@ -4,8 +4,16 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import auc
-from postprocessing.DataAnalysis import make_data_analysis
+from postprocessing.DataAnalysis import make_data_analysis, make_data_analysis_per_inner_seed
 from scipy.stats import ttest_rel
+from ExperimentChooser import get_experiment_parameters
+import csv
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import tree
+from sklearn.model_selection import KFold
+from sklearn.metrics import confusion_matrix
+
 
 def safe_make_dir(path):
     if not os.path.exists(path):
@@ -37,6 +45,7 @@ def get_model_dict(cmap_name):
         # 'sim_ann': {'sample_weight': [0.0, 0.6352, 0.3119, 0.0780], 'color': 'purple'},
         # 'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'green', 'std': False},
         'best_u': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': True},
+        'simple best_u': {'sample_weight': ['', '', '', ''], 'color': 'blue', 'std': True},
         # SYNTHETIC:
         # 'model1': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': True},
         # 'model2': {'sample_weight': ['', '', '', ''], 'color': 'blue', 'std': True},
@@ -166,14 +175,6 @@ def get_df_by_weight_norm(df,
     df_norm = pd.DataFrame(df_dict)
     groups_by_weight = df_norm.groupby('weight')
     return [groups_by_weight.get_group(i) for i in weights]
-
-
-# def get_autcs_by_seed(df_results, model_names):
-#     autcs_by_seed = []
-#     groups_by_seed = df_results.groupby('seed')
-#     for seed, df_seed in groups_by_seed:
-#         groups_by_weight = df_seed.groupby('weight')
-#         # todo: here
 
 
 def plot_results(log_dir, dataset, user_type, models, log_set, bin_size=1, user_name='', show_tradeoff_plots=False,
@@ -574,22 +575,24 @@ def add_best_model(log_dir, valid_set, test_set):
     groups_by_user = df_test.groupby('user')
     user_names = pd.unique(df_best['user'])
     seeds = pd.unique(df_best['seed'])
-    best_models = df_best.to_numpy()
+    # best_models = df_best.to_numpy()
+    best_models = {user: [list(row) for i, row in data.iterrows()] for user, data in df_best.groupby('user')}
     new_model_x = []
     new_model_y = []
-    i = 0
-    for user_name in user_names:
+    # i = 0
+    for user_idx, user_name in enumerate(user_names):
+        print('\tuser %d/%d' % (user_idx + 1, len(user_names)))
         df_user = groups_by_user.get_group(user_name)
         groups_by_seed = df_user.groupby('seed')
-        for seed in seeds:
+        for seed_idx, seed in enumerate(seeds):
             df_seed = groups_by_seed.get_group(seed)
-            best_user, best_seed, best_model = best_models[i]
+            best_user, best_seed, best_model = best_models[user_name][seed_idx]
             new_model_x.extend(df_seed['%s x' % best_model].tolist())
             new_model_y.extend(df_seed['%s y' % best_model].tolist())
             # print('(%s=%s) (%d=%d)' % (user_name, best_user, seed, best_seed))
             if user_name != best_user or seed != best_seed:
                 raise ValueError('results and best lists not in same order of user -> seed')
-            i += 1
+            # i += 1
 
     df_test['best_u x'] = new_model_x
     df_test['best_u y'] = new_model_y
@@ -698,49 +701,6 @@ def binarize_results_by_compat_values(log_dir, log_set, num_bins=100):
         raise KeyError('missing values!')
     pd.DataFrame(dict_binarized).to_csv('%s/%s_bins_log.csv' % (log_dir, log_set), index=False)
 
-    # print('binarizing...')
-    #     df_results = pd.read_csv('%s/%s_log.csv' % (log_dir, log_set))
-    #     user_names = pd.unique(df_results['user'])
-    #     groups_by_user = df_results.groupby('user')
-    #     seeds = pd.unique(df_results['seed'])
-    #     model_names = [i[:-2] for i in df_results.columns if ' x' in i]
-    #     weights = np.array(range(bins + 1)) / bins
-    #     df_bins = pd.DataFrame(columns=df_results.columns, dtype=np.int64)
-    #     user_idx = 0
-    #     for user_name in user_names:
-    #         user_idx += 1
-    #         print('%d/%d user = %s' % (user_idx, len(user_names), user_name))
-    #         df_user = groups_by_user.get_group(user_name)
-    #         groups_by_seed = df_user.groupby('seed')
-    #         for seed in seeds:
-    #             df_user_seed = groups_by_seed.get_group(seed)
-    #             df_by_weight = df_user_seed.groupby('weight').mean()
-    #             df_user_seed_bins = pd.DataFrame({'user': user_name, 'len': df_user_seed['len'].iloc[0], 'seed': seed,
-    #                                          'h1_acc': df_by_weight['h1_acc'].iloc[0], 'weight': weights})
-    #             for model_name in model_names:
-    #                 x = df_by_weight['%s x' % model_name].tolist()
-    #                 y = df_by_weight['%s y' % model_name].tolist()
-    #                 for i in range(1, len(x)):
-    #                     if x[i] < x[i - 1]:
-    #                         x[i] = x[i - 1]
-    #                 x_bins = np.array([i / bins for i in range(1, bins)])
-    #                 x_bins = (x_bins * (x[-1] - x[0]) + x[0]).tolist()
-    #                 y_bins = []
-    #                 i = 0
-    #                 for x_bin in x_bins:  # get y given x for each x_bin
-    #                     while not x[i] <= x_bin <= x[i + 1]:
-    #                         i += 1
-    #                     x_left, x_right, y_left, y_right = x[i], x[i + 1], y[i], y[i + 1]
-    #                     if x_left == x_right:  # vertical line
-    #                         y_bins.append(max(y_left, y_right))
-    #                     else:
-    #                         slope = (y_right - y_left) / (x_right - x_left)
-    #                         y_bins.append(y_left + slope * (x_bin - x_left))
-    #                 df_user_seed_bins['%s x' % model_name] = [x[0]] + x_bins + [x[-1]]
-    #                 df_user_seed_bins['%s y' % model_name] = [y[0]] + y_bins + [y[-1]]
-    #             df_bins = df_bins.append(df_user_seed_bins)
-    #     df_bins.to_csv('%s/%s_bins_log.csv' % (log_dir, log_set), index=False)
-
 
 def best_count_values(log_dir, log_set):
     df_best = pd.read_csv('%s/best_models_%s.csv' % (log_dir, log_set))
@@ -763,37 +723,145 @@ def best_count_values(log_dir, log_set):
     df_result.to_csv('%s/best_models_%s_counts.csv' % (log_dir, log_set), index=False)
 
 
-def execute_phase(phase):
+def get_autcs_averaged_over_inner_seeds(log_dir, log_set):
+    df_results = pd.read_csv('%s/%s_log.csv' % (log_dir, log_set))
+    users = pd.unique(df_results['user'])
+    user_groups = df_results.groupby('user')
+    model_names = [i[:-2] for i in df_results.columns if ' x' in i]
+    with open('%s/%s_autcs.csv' % (log_dir, log_set), 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['user', 'len', 'seed'] + [i for i in model_names])
+        for user_idx, user in enumerate(users):
+            print('\tuser %d/%d' % (user_idx + 1, len(users)))
+            df_user = user_groups.get_group(user)
+            hist_len = df_user.iloc[0]['len']
+            for seed, df_seed in df_user.groupby('seed'):
+                row = [user, hist_len, seed]
+                means = df_seed.groupby('weight').mean()
+                for model_name in model_names:
+                    x = means['%s x' % model_name].tolist()
+                    y = means['%s y' % model_name].tolist()
+                    row += [auc(x, y)]
+                writer.writerow(row)
+
+
+def get_all_autcs(log_dir, log_set):
+    df_results = pd.read_csv('%s/%s_log.csv' % (log_dir, log_set))
+    users = pd.unique(df_results['user'])
+    user_groups = df_results.groupby('user')
+    model_names = [i[:-2] for i in df_results.columns if ' x' in i]
+    with open('%s/%s_all_autcs.csv' % (log_dir, log_set), 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['user', 'seed', 'inner seed'] + [i for i in model_names])
+        for user_idx, user in enumerate(users):
+            print('\tuser %d/%d' % (user_idx + 1, len(users)))
+            df_user = user_groups.get_group(user)
+            for seed, df_seed in df_user.groupby('seed'):
+                for inner_seed, df_inner_seed in df_seed.groupby('inner_seed'):
+                    row = [user, seed, inner_seed]
+                    for model_name in model_names:
+                        x = df_inner_seed['%s x' % model_name].tolist()
+                        y = df_inner_seed['%s y' % model_name].tolist()
+                        row += [auc(x, y)]
+                    writer.writerow(row)
+
+
+def get_user_distances(log_dir):
+    wasserstein_distances = pd.read_csv('%s/wasserstein_distances.csv' % log_dir, index_col='user')
+    feature_importances = pd.read_csv('%s/feature_importances.csv' % log_dir, index_col='user')
+    gen_feature_importance = feature_importances.loc['general']
+    user_distances = {}
+    for user, row in wasserstein_distances.iterrows():
+        user_distances[user] = np.average(row, weights=gen_feature_importance)
+    return user_distances
+
+
+def get_best_from_row(rows, models, append_vector=True):
+    bests = []
+    for row in rows:
+        best_autc = 0
+        best_name = 'no hist'
+        best_idx = 0
+        for i, model in enumerate(models):
+            if row[model] > best_autc:
+                best_autc = row[model]
+                best_name = model
+                best_idx = i
+        if append_vector:
+            best_vector = [0] * len(models)
+            best_vector[best_idx] = 1
+            bests.append([best_name, best_vector])
+        else:
+            bests.append(best_name)
+    return bests
+
+
+def get_sample_indexes_from_user_indexes(fold, num_seeds):
+    train_index, test_index = [], []
+    for users_index, subset_index in zip(fold, [train_index, test_index]):
+        for i in users_index:
+            start_index = i * num_seeds
+            subset_index.extend([start_index + j for j in range(num_seeds)])
+    return np.array(train_index), np.array(test_index)
+
+
+def get_NN_meta_model(X, y, dense_lens):
+    input = Input(shape=(X.shape[1],), name='input')
+    layer = input
+    for dense_len in dense_lens:
+        layer = Dense(dense_len, activation='relu')(layer)
+    output = Dense(y.shape[1], activation='softmax')(layer)
+    model = Model(input, output, name='meta-model')
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['acc'])
+    # model.summary()
+    return model
+
+
+def execute_phase(phase, log_set):
     binarize_by_compat = False
     individual_users = False
     get_best = False
+    get_autoML_best = False
     add_best = False
     make_summary = False
+    get_autcs = False
+    count_best = False
+    test_set = 'test_bins'
 
     print('\n%s' % phase)
-    if phase == 'phase 1 - binarize validation results':
+    if phase == 'binarize validation results':
         log_set = 'valid'
         binarize_by_compat = True
-    elif phase == 'phase 2 - get best_u for each user using binarized validation results':
+    elif phase == 'binarize train results':
+        log_set = 'train'
+        binarize_by_compat = True
+    elif phase == 'get best_u for each user using binarized validation results':
         log_set = 'valid_bins'
         individual_users = True
         get_best = True
-    elif phase == 'phase 3 - binarize test results':
+    elif phase == 'get best_u for each user using binarized train results':
+        log_set = 'train_bins'
+        individual_users = True
+        get_best = True
+    elif phase == 'binarize test results':
         log_set = 'test'
         binarize_by_compat = True
-    elif phase == 'phase 4 - add best_u computed from validation to binarized test results':
+    elif phase == 'add best_u computed from validation to binarized test results':
         log_set = 'valid_bins'
         add_best = True
-    elif phase == 'phase 5 - generate averaged plots for binarized test results with best':
+    elif phase == 'add best_u computed from train to binarized validation results':
+        log_set = 'train_bins'
+        test_set = 'valid_bins'
+        add_best = True
+    elif phase == 'generate averaged plots for binarized test results with best':
         log_set = 'test_bins_with_best'
-    elif phase == 'phase 6 - generate individual user plots for test bins with best results':
+    elif phase == 'generate individual user plots for test bins with best results':
         log_set = 'test_bins_with_best'
         individual_users = True
-    elif phase == 'phase 7 - create test summary':
+    elif phase == 'create test summary':
         log_set = 'test_bins_with_best'
         make_summary = True
         individual_users = True
-
     elif phase == 'generate user plots for binarized validation results':
         log_set = 'valid_bins'
         individual_users = True
@@ -801,24 +869,32 @@ def execute_phase(phase):
         log_set = 'valid_bins'
     elif phase == 'generate averaged plots for binarized test results':
         log_set = 'test_bins'
-
-    # print('phase 1 - for synthetic')
-    # log_set = 'valid_bins'
-    # individual_users = True
-    # get_best = True
-
-    # print('phase 2 - for synthetic')
-    # # log_set = 'valid'
-    # log_set = 'valid_bins'
-
-    # default
-    test_set = 'test_bins'
-    count_best = False
+    elif phase == 'binarize train results':
+        log_set = 'train'
+        binarize_by_compat = True
+    elif phase == 'generate averaged plots for binarized train results':
+        log_set = 'train_bins'
+    elif phase == 'get autcs averaged over inner seeds for train bins':
+        log_set = 'train_bins'
+        get_autcs = True
+    elif phase == 'get autcs averaged over inner seeds for validation bins':
+        log_set = 'valid_bins'
+        get_autcs = True
+    elif phase == 'get autcs averaged over inner seeds for test bins':
+        log_set = 'test_bins'
+        get_autcs = True
+    elif phase == 'get autcs averaged over inner seeds for test bins with best':
+        log_set = 'test_bins_with_best'
+        get_autcs = True
+    elif phase == 'generate averaged plots for binarized validation results with best':
+        log_set = 'valid_bins_with_best'
+    elif phase == 'get best for each user':
+        individual_users = True
+        get_autoML_best = True
 
     results_dir = 'C:/Users/Jonathan/Documents/BGU/Research/Thesis/results/%s' % model_type
     log_dir = '%s/%s/%s/%s/%s' % (results_dir, dataset, version, user_type, performance_metric)
     models = get_model_dict('jet')
-    # models = get_model_dict('gist_rainbow')
 
     if add_best:
         add_best_model(log_dir, log_set, test_set)
@@ -826,155 +902,392 @@ def execute_phase(phase):
         best_count_values(log_dir, log_set)
     elif binarize_by_compat:
         binarize_results_by_compat_values(log_dir, log_set, num_normalization_bins)
-    elif not individual_users:
+    elif get_autcs:
+        get_autcs_averaged_over_inner_seeds(log_dir, log_set)
+        # get_all_autcs(log_dir, log_set)
+    elif not individual_users:  # make sure this is last elif
         if get_best:
-            # best_model = get_best_models(log_dir, models, log_set)
             print('got best models for general set, not individual users!')
         else:
             plot_results(log_dir, dataset, user_type, models, log_set, bin_size=bin_size, show_tradeoff_plots=True)
     else:
-        users_dir = '%s/users_%s' % (log_dir, log_set)
-        user_logs_dir = '%s/logs' % users_dir
-        if not os.path.exists(users_dir):
-            safe_make_dir(user_logs_dir)
-            split_users(log_dir, log_set)
-        df = pd.read_csv('%s/%s_log.csv' % (log_dir, log_set))
-        user_ids = pd.unique(df['user'])
-        user_groups = df.groupby('user')
-        lens = [user_groups.get_group(i)['len'].iloc[0] for i in user_ids]
-        if get_best:
-            user_col = []
-            seed_col = []
-            model_col = []
-            for user_idx in range(len(user_ids)):
-                user_id = user_ids[user_idx]
-                print('%d/%d user %s' % (user_idx + 1, len(user_ids), user_id))
-                seeds, best_models_by_seed = get_best_models('%s/users_%s/logs' % (log_dir, log_set), models, log_set,
-                                                             user_name=user_id)
-                user_col += [user_id] * len(seeds)
-                seed_col += seeds
-                model_col += best_models_by_seed
-            df = pd.DataFrame({'user': user_col, 'seed': seed_col, 'model': model_col})
-            df.to_csv('%s/best_models_%s.csv' % (log_dir, log_set), index=False)
-        elif make_summary:
-            make_data_analysis(log_dir, dataset, user_type, target_col)
-            user_col = []
-            len_col = []
-            weighted_distances = []
-            wasserstein_distances = pd.read_csv('%s/wasserstein_distances.csv' % log_dir, index_col='user')
-            feature_importances = pd.read_csv('%s/feature_importances.csv' % log_dir, index_col='user')
-            gen_feature_importance = feature_importances.loc['general']
-            summary_final_results = [None for i in summary_metrics]
-            # autc_improv_by_model_avg = None
-            # autc_improv_by_model_std = None
-            # autc_improv_by_model_pval = None
-            for user_idx in range(len(user_ids)):
-                user_id = user_ids[user_idx]
-                hist_len = lens[user_idx]
-                print('%d/%d user %s' % (user_idx + 1, len(user_ids), user_id))
-                # autc_improv_by_model_user_avg, autc_improv_by_model_user_std, autc_improv_by_model_user_pval, \
-                summary_results = summarize('%s/users_%s/logs' % (log_dir, log_set), log_set, summary_metrics,
-                                        user_name=user_id)
-                user_col += [user_id]  # * len(seeds)
-                len_col += [hist_len]  # * len(seeds)
-                weighted_distances += [np.average(wasserstein_distances.loc[user_id], weights=gen_feature_importance)]
-                if summary_final_results[0] is None:
-                    for i in range(len(summary_metrics)):
-                        summary_final_results[i] = summary_results[i]
-                    # autc_improv_by_model_avg = autc_improv_by_model_user_avg
-                    # autc_improv_by_model_std = autc_improv_by_model_user_std
-                    # autc_improv_by_model_pval = autc_improv_by_model_user_pval
-                else:
-                    for i in range(len(summary_metrics)):
-                        for j in range(len(summary_results[0])):
-                            summary_final_results[i][j].extend(summary_results[i][j])
-                        # autc_improv_by_model_avg[i].extend(autc_improv_by_model_user_avg[i])
-                        # autc_improv_by_model_std[i].extend(autc_improv_by_model_user_std[i])
-                        # autc_improv_by_model_pval[i].extend(autc_improv_by_model_user_pval[i])
+        if get_autoML_best:
+            models = ['no hist', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8']
+            make_data_analysis_per_inner_seed(log_dir, dataset, user_type, target_col)
+            train_autcs = pd.read_csv('%s/train_bins_autcs.csv' % log_dir)
+            valid_autcs = pd.read_csv('%s/valid_bins_autcs.csv' % log_dir)
+            with open('%s/best_models_valid_bins.csv' % log_dir, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(['user', 'seed', 'model'])
+                if meta_learning_version == 'generalize train to validation':
+                    for row_idx in range(len(train_autcs)):
+                        train_row, valid_row = train_autcs.iloc[row_idx], valid_autcs.iloc[row_idx]
+                        train_best_autc = 0
+                        train_best_model = 'no hist'
+                        for model in models:
+                            if train_row[model] > train_best_autc:
+                                train_best_autc = train_row[model]
+                                train_best_model = model
+                        if valid_row[train_best_model] > valid_row['no hist']:
+                            writer.writerow([train_row['user'], train_row['seed'], train_best_model])
+                        else:
+                            writer.writerow([train_row['user'], train_row['seed'], 'no hist'])
+                elif meta_learning_version == 'meta-learner split within users':
+                    test_autcs = pd.read_csv('%s/test_bins_autcs.csv' % log_dir)
+                    distances = pd.read_csv('%s/distances_by_seed.csv' % log_dir)
+                    seeds = pd.unique(train_autcs['seed'])
+                    train_groups_by_seed = train_autcs.groupby('seed')
+                    valid_groups_by_seed = valid_autcs.groupby('seed')
+                    test_groups_by_seed = test_autcs.groupby('seed')
+                    distances_groups_by_seed = distances.groupby('seed')
+                    max_depth = 5
+                    for seed_idx, seed in enumerate(seeds):
+                        train_autcs_seed = train_groups_by_seed.get_group(seed)
+                        valid_autcs_seed = valid_groups_by_seed.get_group(seed)
+                        test_autcs_seed = test_groups_by_seed.get_group(seed)
+                        distances_seed = distances_groups_by_seed.get_group(seed)
+                        x_train, y_train, x_test, y_test = [], [], [], []
+                        for row_idx in range(len(train_autcs_seed)):
+                            train_row = train_autcs_seed.iloc[row_idx]
+                            valid_row = valid_autcs_seed.iloc[row_idx]
+                            test_row = test_autcs_seed.iloc[row_idx]
+                            d = distances_seed.iloc[row_idx]
+                            l = train_row['len']
+                            train_best, valid_best, test_best = get_best_from_row(
+                                [train_row, valid_row, test_row], models)
+                            # todo: maybe append train_best too
+                            x_train_row = [l, d['train_to_h2'], d['train_to_valid'], d['h2_to_valid']] + train_best[1]
+                            x_test_row = [l, d['train_to_h2'], d['train_to_test'], d['h2_to_test']] + valid_best[1]
+                            x_train.append(x_train_row)
+                            x_test.append(x_test_row)
+                            y_train.append(valid_best[0])
+                            y_test.append(test_best[0])
+                        # train meta-model
+                        # max_depth += 1
+                        x_train = np.array(x_train)
+                        x_test = np.array(x_test)
+                        y_train = np.array(y_train)
+                        y_test = np.array(y_test)
 
-            # all users together
-            # autc_by_model_all_users_avg, autc_by_model_all_users_std, autc_by_model_all_users_pval, \
-            summary_results = summarize(log_dir, log_set, summary_metrics)
-            model_names = summary_results[-1]
-            user_col += ['all users']
-            len_col += [sum(len_col)]
-            weighted_distances += [0]
-            for i in range(len(summary_metrics)):
-                for j in range(len(summary_results[0])):
-                    summary_final_results[i][j].extend(summary_results[i][j])
+                        meta_model = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth, random_state=1),
+                                                        n_estimators=1000, learning_rate=1, random_state=1)
+                        meta_model.fit(x_train, y_train)
 
-            # df_dict = {'user': user_col, 'len': len_col, 'dist': weighted_distances, 'seed': seed_col}
-            for metric, metric_results in zip(summary_metrics, summary_final_results):
-                df_dict = {'user': user_col, 'len': len_col, 'dist': weighted_distances}
-                for i in range(len(model_names)):
-                    df_dict[model_names[i]] = metric_results[i]
-                df = pd.DataFrame(df_dict)
-                df.to_csv('%s/summary_of_%s_%s.csv' % (log_dir, log_set, metric), index=False)
+                        # meta_model = DecisionTreeClassifier(max_depth=max_depth, random_state=1)
+                        # meta_model.fit(x_train, y_train)
+                        # # feature_names = ['len', 'train_to_h2', 'train_to_test', 'h2_to_test'] + models
+                        # # tree.plot_tree(meta_model, feature_names=feature_names)
+                        # # plt.show()
+
+                        y_predicted = meta_model.predict(x_test)
+                        train_acc = meta_model.score(x_train, y_train)
+                        test_acc = meta_model.score(x_test, y_test)
+
+                        for row_idx in range(len(train_autcs_seed)):
+                            row = train_autcs_seed.iloc[row_idx]
+                            predicted_label = y_predicted[row_idx]
+                            writer.writerow([row['user'], seed, predicted_label])
+
+                        print('seed %d/%d max_depth=%d train_score=%.4f test_score=%.4f'
+                              % (seed_idx + 1, len(seeds), max_depth, train_acc, test_acc))
+                elif meta_learning_version == 'meta-learner split between users':
+                    meta_dataset = train_autcs[['user', 'len']].copy()
+
+                    # add distances
+                    distances = pd.read_csv('%s/distances_by_seed.csv' % log_dir)
+                    distance_cols = list(distances.columns)[3:]
+                    for distance_col in distance_cols:
+                        meta_dataset[distance_col] = distances[distance_col]
+
+                    # add best models
+                    test_autcs = pd.read_csv('%s/test_bins_autcs.csv' % log_dir)
+
+                    if meta_learning_task == 'selecting best':
+                        bests_train, bests_valid, bests_test = [], [], []
+                        bests_train_vectors, bests_valid_vectors, bests_test_vectors = [], [], []
+                        for row_idx in range(len(train_autcs)):
+                            train_row, valid_row, test_row = [
+                                train_autcs.iloc[row_idx], valid_autcs.iloc[row_idx], test_autcs.iloc[row_idx]]
+                            train_best, valid_best, test_best = get_best_from_row(
+                                [train_row, valid_row, test_row], models)
+                            # append model names
+                            bests_train.append(train_best[0])
+                            bests_valid.append(valid_best[0])
+                            bests_test.append(test_best[0])
+                            # append one hot vectors
+                            bests_train_vectors.append(train_best[1])
+                            bests_valid_vectors.append(valid_best[1])
+                            bests_test_vectors.append(test_best[1])
+                        meta_dataset['best_train'] = bests_train
+                        meta_dataset['best_valid'] = bests_valid
+                        meta_dataset['best_test'] = bests_test
+                        meta_dataset.to_csv('%s/meta_dataset_ver_1.csv' % log_dir, index=False)
+                        X = meta_dataset.drop(columns=['user', 'best_train', 'best_valid', 'best_test']).to_numpy()
+                        X = np.concatenate([X, bests_train_vectors, bests_valid_vectors], axis=1)  # encode model names
+                        if meta_learning_model == 'NN':
+                            y = np.array(bests_test_vectors)
+                        else:
+                            y = np.array(bests_test)
+
+                    elif meta_learning_task == 'selecting best from train or valid':
+                        # score(baseline, train), score(baseline, valid),
+                        # score(best_train, valid) and score(best_valid, train)
+                        scores = [[], [], [], []]
+                        # string and vector
+                        labels = [[], []]
+                        for row_idx in range(len(train_autcs)):
+                            train_row, valid_row, test_row = [
+                                train_autcs.iloc[row_idx], valid_autcs.iloc[row_idx], test_autcs.iloc[row_idx]]
+                            train_best, valid_best, test_best = get_best_from_row(
+                                [train_row, valid_row, test_row], models, append_vector=False)
+                            scores[0].append(train_row['no hist'] / train_row[train_best])
+                            scores[1].append(valid_row['no hist'] / valid_row[valid_best])
+                            scores[2].append(valid_row[train_best] / valid_row[valid_best])
+                            scores[3].append(train_row[valid_best] / train_row[train_best])
+
+                            # if valid_best == test_best:
+                            #     labels[0].append('valid')
+                            #     labels[1].append([0, 0, 1])
+                            # elif train_best == test_best:
+                            #     labels[0].append('train')
+                            #     labels[1].append([0, 1, 0])
+                            # else:
+                            #     labels[0].append('baseline')
+                            #     labels[1].append([1, 0, 0])
+
+                            if test_row[valid_best] >= test_row[train_best]:
+                                if test_row[valid_best] >= test_row['no hist']:  # select valid_best
+                                    labels[0].append('valid')
+                                    labels[1].append([0, 0, 1])
+                                else:  # select baseline
+                                    labels[0].append('baseline')
+                                    labels[1].append([1, 0, 0])
+                            else:  #
+
+
+
+                        meta_dataset['score(baseline, train)'] = scores[0]
+                        meta_dataset['score(baseline, valid)'] = scores[1]
+                        meta_dataset['score(best_train, valid)'] = scores[2]
+                        meta_dataset['score(best_valid, train)'] = scores[3]
+                        meta_dataset['label'] = labels[0]
+                        meta_dataset.to_csv('%s/meta_dataset_ver_3.csv' % log_dir, index=False)
+                        X = meta_dataset.drop(columns=['user', 'label']).to_numpy()
+                        if meta_learning_model == 'NN':
+                            y = np.array(labels[1])
+                            X[:, 0] = X[:, 0] / np.max(X[:, 0])
+                        else:
+                            y = np.array(labels[0])
+
+                    # cross validation over users
+                    print('starting cross-validation...')
+                    meta_learning_results = []
+                    users = pd.unique(meta_dataset['user'])
+                    num_seeds = int(len(meta_dataset) / len(users))
+                    k_fold_cross_validation = KFold(n_splits=meta_cross_validation_splits,
+                                                    shuffle=True, random_state=1)
+
+                    ccp_alphas = [i / 10000 for i in range(1, 10)]
+                    ccp_alphas += [i / 1000 for i in range(1, 10)]
+                    ccp_alphas += [i / 100 for i in range(1, 10)]
+                    ccp_alphas += [i / 10 for i in range(1, 10)]
+
+                    for fold_idx, fold in enumerate(k_fold_cross_validation.split(users)):
+                        train_index, test_index = get_sample_indexes_from_user_indexes(fold, num_seeds)
+                        X_train, y_train = X[train_index], y[train_index]
+                        X_test, y_test = X[test_index], y[test_index]
+
+                        if meta_learning_model == 'AdaBoost':
+                            # meta_model = AdaBoostClassifier(DecisionTreeClassifier(min_samples_leaf=10, random_state=1),
+                            #                                 n_estimators=200, learning_rate=1, random_state=1)
+                            # meta_model.fit(X_train, y_train)
+
+                            label_names, label_counts = np.unique(y_test, return_counts=True)
+                            test_fractions = pd.DataFrame(label_counts.reshape(1, 3) / np.sum(label_counts),
+                                                          columns=label_names)
+
+                            print('fold=%d' % (fold_idx + 1))
+                            for ccp_alpha in ccp_alphas:
+                                meta_model = DecisionTreeClassifier(ccp_alpha=ccp_alpha, random_state=1)
+                                meta_model.fit(X_train, y_train)
+
+                                # # plot
+                                # feature_names = meta_dataset.columns.drop(['user', 'label'])
+                                # fig, ax = plt.subplots(figsize=(30, 25))
+                                # tree.plot_tree(meta_model, feature_names=feature_names, fontsize=6)
+                                # plt.savefig('meta_tree', dpi=200)
+                                # # plt.show()
+
+                                train_acc = meta_model.score(X_train, y_train)
+                                test_acc = meta_model.score(X_test, y_test)
+
+                                meta_learning_results.append(
+                                    [fold_idx, test_fractions['baseline'][0], test_fractions['train'][0],
+                                     test_fractions['valid'][0], ccp_alpha, train_acc, test_acc])
+                            # break
+
+                        elif meta_learning_model == 'NN':
+                            meta_model = get_NN_meta_model(X, y, [5])
+                            history = meta_model.fit(X_train, y_train, batch_size=100, epochs=200, verbose=2)
+                            train_loss, train_acc = meta_model.evaluate(X_train, y_train, verbose=0)
+                            test_loss, test_acc = meta_model.evaluate(X_test, y_test, verbose=0)
+
+                            y_proba = meta_model.predict(X_test)
+                            matrix = confusion_matrix(y_test.argmax(1), y_proba.argmax(1))
+                            print(matrix)
+
+                        # print('fold %d train_acc=%.4f test_acc=%.4f | baselines=%.4f best_trains=%.4f best_valids=%.4f'
+                        #       % (fold_idx + 1, train_acc, test_acc, test_fractions['baseline'],
+                        #          test_fractions['train'], test_fractions['valid']))
+
+                        # break
+                    pd.DataFrame(meta_learning_results,
+                                 columns=['fold', 'baselines_fraction', 'best_trains_fraction', 'best_valids_fraction',
+                                          'ccp_alpha', 'train_acc', 'test_acc']).to_csv(
+                        '%s/meta_learning_results.csv' % log_dir, index=False)
         else:
-            for user_idx in range(len(user_ids)):
-                user_id = user_ids[user_idx]
-                print('%d/%d user=%s' % (user_idx + 1, len(user_ids), user_id))
-                plot_results('%s/users_%s' % (log_dir, log_set), dataset, user_type, models, log_set,
-                             bin_size=bin_size, user_name=user_id)
+            users_dir = '%s/users_%s' % (log_dir, log_set)
+            user_logs_dir = '%s/logs' % users_dir
+            if not os.path.exists(users_dir):
+                safe_make_dir(user_logs_dir)
+                split_users(log_dir, log_set)
+            df = pd.read_csv('%s/%s_log.csv' % (log_dir, log_set))
+            user_ids = pd.unique(df['user'])
+            user_groups = df.groupby('user')
+            lens = [user_groups.get_group(i)['len'].iloc[0] for i in user_ids]
+            if get_best:
+                user_col = []
+                seed_col = []
+                model_col = []
+                for user_idx in range(len(user_ids)):
+                    user_id = user_ids[user_idx]
+                    print('%d/%d user %s' % (user_idx + 1, len(user_ids), user_id))
+                    seeds, best_models_by_seed = get_best_models('%s/users_%s/logs' % (log_dir, log_set), models,
+                                                                 log_set,
+                                                                 user_name=user_id)
+                    user_col += [user_id] * len(seeds)
+                    seed_col += seeds
+                    model_col += best_models_by_seed
+                df = pd.DataFrame({'user': user_col, 'seed': seed_col, 'model': model_col})
+                df.to_csv('%s/best_models_%s.csv' % (log_dir, log_set), index=False)
+            elif make_summary:
+                if compare_by_percentage:
+                    method = 'percent'
+                else:
+                    method = 'absolute'
+                make_data_analysis(log_dir, dataset, user_type, target_col)
+                user_col = []
+                len_col = []
+                distance_col = []
+                user_distances = get_user_distances(log_dir)
+                summary_final_results = [None for i in summary_metrics]
+                for user_idx in range(len(user_ids)):
+                    user_id = user_ids[user_idx]
+                    l = lens[user_idx]
+                    print('%d/%d user %s' % (user_idx + 1, len(user_ids), user_id))
+                    summary_results = summarize('%s/users_%s/logs' % (log_dir, log_set), log_set, summary_metrics,
+                                                user_name=user_id)
+                    user_col += [user_id]  # * len(seeds)
+                    len_col += [l]  # * len(seeds)
+                    distance_col += [user_distances[user_id]]
+                    if summary_final_results[0] is None:
+                        for row_idx in range(len(summary_metrics)):
+                            summary_final_results[row_idx] = summary_results[row_idx]
+                    else:
+                        for row_idx in range(len(summary_metrics)):
+                            for j in range(len(summary_results[0])):
+                                summary_final_results[row_idx][j].extend(summary_results[row_idx][j])
+                # all users together
+                summary_results = summarize(log_dir, log_set, summary_metrics)
+                model_names = summary_results[-1]
+                user_col += ['all users']
+                len_col += [sum(len_col)]
+                distance_col += [0]
+                for row_idx in range(len(summary_metrics)):
+                    for j in range(len(summary_results[0])):
+                        summary_final_results[row_idx][j].extend(summary_results[row_idx][j])
+
+                for metric, metric_results in zip(summary_metrics, summary_final_results):
+                    df_dict = {'user': user_col, 'len': len_col, 'dist': distance_col}
+                    for row_idx in range(len(model_names)):
+                        df_dict[model_names[row_idx]] = metric_results[row_idx]
+                    df = pd.DataFrame(df_dict)
+                    df.to_csv('%s/summary_of_%s_%s_%s.csv' % (log_dir, log_set, method, metric), index=False)
+            else:
+                for user_idx in range(len(user_ids)):
+                    user_id = user_ids[user_idx]
+                    print('%d/%d user=%s' % (user_idx + 1, len(user_ids), user_id))
+                    plot_results('%s/users_%s' % (log_dir, log_set), dataset, user_type, models, log_set,
+                                 bin_size=bin_size, user_name=user_id)
 
 
+# todo: CHOOSE WHAT TO ANALYSE
 # dataset = 'ednet'
-# version = 'unbalanced/20 users'
-# user_type = 'user'
-# target_col = 'correct_answer'
-# model_type = 'simulated annealing'
-# bin_size = 10
-
-# dataset = 'assistment'
-# version = 'tree'
-# user_type = 'user_id'
-# target_col = 'correct'
-# model_type = 'large experiments'
-# performance_metric = 'acc'
-# bin_size = 10
-
-dataset = 'salaries'
-version = 'all dataset'
-user_type = 'relationship'
-target_col = 'salary'
-model_type = 'large experiments'
-performance_metric = 'acc'
-bin_size = 10
-
+dataset = 'assistment'
+# dataset = 'salaries'
 # dataset = 'recividism'
-# version = 'tree'
-# user_type = 'race'
-# target_col = 'is_recid'
-# model_type = 'large experiments'
-# performance_metric = 'acc'
-# bin_size = 10
-
 # dataset = 'averaging tradeoffs'
-# version = 'justifying stdev of delta'
-# user_type = 'synthetic_user'
-# model_type = 'synthetic'
-# bin_size = 1
 
-# todo: CHOOSE EXPERIMENT PHASE
-phases = [
-    # 'phase 1 - binarize validation results',
-    # 'phase 2 - get best_u for each user using binarized validation results',
-    # 'phase 3 - binarize test results',
-    # 'phase 4 - add best_u computed from validation to binarized test results',
-    # 'phase 5 - generate averaged plots for binarized test results with best',
-    # 'phase 6 - generate individual user plots for test bins with best results',
-    'phase 7 - create test summary',
-    # 'generate user plots for binarized validation results',
-    # 'generate averaged plots for binarized validation results',
-    # 'generate averaged plots for binarized test results',
-]
+# use_autoML = False
+use_autoML = True
+
+if use_autoML:
+    phases = [
+        # 'binarize train results',
+        # 'binarize validation results',
+        # 'binarize test results',
+        # 'get autcs averaged over inner seeds for train bins',
+        # 'get autcs averaged over inner seeds for validation bins',
+        # 'get autcs averaged over inner seeds for test bins',
+        'get best for each user',
+        # 'add best_u computed from validation to binarized test results',
+        # 'generate averaged plots for binarized test results with best',
+        # 'create test summary',
+
+        # 'generate averaged plots for binarized train results',
+        # 'generate averaged plots for binarized validation results with best',
+        # 'get autcs averaged over inner seeds for test bins with best',
+    ]
+else:
+    phases = [
+        # 'binarize validation results',  # phase 1
+        # 'get best_u for each user using binarized validation results',  # phase 2
+        # 'binarize test results',  # phase 3
+        # 'add best_u computed from validation to binarized test results',  # phase 4
+        # 'generate averaged plots for binarized test results with best',  # phase 5
+        # 'generate individual user plots for test bins with best results',  # phase 6
+        # 'create test summary',  # phase 7
+        # 'generate user plots for binarized validation results',
+        # 'generate averaged plots for binarized validation results',
+        # 'generate averaged plots for binarized test results',
+        # 'binarize train results',
+        # 'generate averaged plots for binarized train results',
+        # 'get autcs averaged over inner seeds',
+    ]
+
 add_parametrized_models = True
-num_normalization_bins = 100
+num_normalization_bins = 20
 compare_by_percentage = True
-summary_metrics = ['avg', 'std', 'paired_ttest']
-# summary_metrics = ['paired_ttest']
+# meta_learning_version = 'best from validation'
+# meta_learning_version = 'generalize train to validation'
+# meta_learning_version = 'meta-learner split within users'
+meta_learning_version = 'meta-learner split between users'
+# meta_learning_task = 'selecting best'
+meta_learning_task = 'selecting best from train or valid'
+# meta_learning_model = 'NN'
+meta_learning_model = 'AdaBoost'
+meta_cross_validation_splits = 10
+# summary_metrics = ['avg', 'std', 'paired_ttest']
+summary_metrics = ['avg']
+log_set = 'test_bins_with_best'
 
+if meta_learning_model == 'NN':
+    from keras.models import Model
+    from keras.layers import Dense, Input
+
+version, user_type, target_col, model_type, performance_metric, bin_size = get_experiment_parameters(dataset, True)
+print('dataset = %s' % dataset)
 for phase in phases:
-    execute_phase(phase)
+    execute_phase(phase, log_set)
 
 print('\ndone')

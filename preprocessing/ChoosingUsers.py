@@ -10,7 +10,7 @@ def choose_users():
     # len_delta = int((max_user_len - min_user_len) / num_users)
     # chosen_lens = [max_user_len - i * len_delta for i in range(num_users)]
 
-    dir = 'C:/Users/Jonathan/Documents/BGU/Research/Thesis/DataSets/%s' % dataset
+    dir = 'C:/Users/Jonathan/Documents/BGU/Research/Thesis/DataSets/%s/caches/%s/0.csv' % (dataset, cache)
     df = pd.read_csv('%s/%s.csv' % (dir, dataset))
     user_lens = df[user_col].value_counts()
     groups_by_user = df.groupby(user_col)
@@ -28,6 +28,7 @@ def choose_users():
 
 
 dataset = 'assistment'
+cache = 'user_id skip_skill max_len_0 min_hist_50 max_hist_100000 chrono_False balance_False'
 user_col = 'user_id'
 num_users = 99
 max_user_len = 1100

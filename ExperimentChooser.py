@@ -1,88 +1,148 @@
 import json
 
 
-def get_experiment_parameters(dataset_name):
+def get_experiment_parameters(dataset_name, result_analysis=False):
 
     if dataset_name == 'assistment':
-        # data settings
-        target_col = 'correct'
-        original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
-        user_cols = ['user_id']
-        skip_cols = ['skill']
-        df_max_size = 0
-        hists_already_determined = True
-        # experiment settings
-        train_frac = 0.7
-        valid_frac = 0.2
-        h1_len = 50
-        h2_len = 50000
-        seeds = [9]
-        inner_seeds = [2]
-        weights_num = 10
-        weights_range = [0, 1]
-        # model settings
-        model_type = 'ridge'
-        max_depth = None
-        ccp_alpha = 0.005
-        ridge_alpha = 0.0001
-        # user settings
-        min_hist_len = 50
-        max_hist_len = 100000
-        metrics = ['acc']
+        if not result_analysis:
+            # data settings
+            target_col = 'correct'
+            original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
+            user_cols = ['user_id']
+            skip_cols = ['skill']
+            df_max_size = 0
+            hists_already_determined = True
+            # experiment settings
+            train_frac = 0.7
+            valid_frac = 0.2
+            h1_len = 50
+            h2_len = 50000
+            seeds = [10]
+            inner_seeds = [10]
+            weights_num = 20
+            weights_range = [0, 1]
+            # model settings
+            model_type = 'ridge'
+            max_depth = None
+            ccp_alpha = 0.005
+            ridge_alpha = 0.0001
+            # user settings
+            min_hist_len = 50
+            max_hist_len = 100000
+            metrics = ['acc']
+        else:
+            version = 'with train log'
+            user_type = 'user_id'
+            target_col = 'correct'
+            model_type = 'large experiments'
+            performance_metric = 'acc'
+            bin_size = 10
 
     if dataset_name == 'ednet':
-        # data settings
-        target_col = 'correct_answer'
-        original_categ_cols = ['source', 'platform']
-        user_cols = ['user']
-        # skip_cols = []
-        skip_cols = ['bkt_skill_learn_rate', 'bkt_skill_forget_rate', 'bkt_skill_guess_rate', 'bkt_skill_slip_rate']
-        df_max_size = 100000
-        hists_already_determined = False
-        # experiment settings
-        train_frac = 0.7
-        valid_frac = 0.2
-        h1_len = 20
-        h2_len = 30000
-        seeds = range(2)
-        inner_seeds = range(2)
-        weights_num = 3
-        weights_range = [0, 1]
-        # model settings
-        max_depth = None
-        ccp_alpha = 0.009
-        ridge_alpha = 0.0001
-        # user settings
-        min_hist_len = 0
-        max_hist_len = 100000
-        metrics = ['acc', 'auc']
+        if not result_analysis:
+            # data settings
+            target_col = 'correct_answer'
+            original_categ_cols = ['source', 'platform']
+            user_cols = ['user']
+            # skip_cols = []
+            skip_cols = ['bkt_skill_learn_rate', 'bkt_skill_forget_rate', 'bkt_skill_guess_rate', 'bkt_skill_slip_rate']
+            df_max_size = 100000
+            hists_already_determined = False
+            # experiment settings
+            train_frac = 0.7
+            valid_frac = 0.2
+            h1_len = 20
+            h2_len = 30000
+            seeds = range(2)
+            inner_seeds = range(2)
+            weights_num = 3
+            weights_range = [0, 1]
+            # model settings
+            max_depth = None
+            ccp_alpha = 0.009
+            ridge_alpha = 0.0001
+            # user settings
+            min_hist_len = 0
+            max_hist_len = 100000
+            metrics = ['acc', 'auc']
+        else:
+            version = 'unbalanced/20 users'
+            user_type = 'user'
+            target_col = 'correct_answer'
+            model_type = 'simulated annealing'
+            performance_metric = 'acc'
+            bin_size = 10
 
     if dataset_name == 'salaries':
-        # data settings
-        target_col = 'salary'
-        original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
-                               'native-country']
-        user_cols = ['relationship']
-        skip_cols = ['fnlgwt', 'education', 'native-country']
-        df_max_size = 50000
-        hists_already_determined = False
-        # experiment settings
-        train_frac = 0.7
-        valid_frac = 0.2
-        h1_len = 20
-        h2_len = 50000
-        seeds = range(2)
-        inner_seeds = range(2)
-        weights_num = 5
-        weights_range = [0, 1]
-        # model settings
-        max_depth = None
-        ccp_alpha = 0.008
-        ridge_alpha = 0.0001
-        # user settings
-        min_hist_len = 50
-        max_hist_len = 50000
-        metrics = ['acc', 'auc']
+        if not result_analysis:
+            # data settings
+            target_col = 'salary'
+            original_categ_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race',
+                                   'sex',
+                                   'native-country']
+            user_cols = ['relationship']
+            skip_cols = ['fnlgwt', 'education', 'native-country']
+            df_max_size = 50000
+            hists_already_determined = False
+            # experiment settings
+            train_frac = 0.7
+            valid_frac = 0.2
+            h1_len = 20
+            h2_len = 50000
+            seeds = range(2)
+            inner_seeds = range(2)
+            weights_num = 5
+            weights_range = [0, 1]
+            # model settings
+            max_depth = None
+            ccp_alpha = 0.008
+            ridge_alpha = 0.0001
+            # user settings
+            min_hist_len = 50
+            max_hist_len = 50000
+            metrics = ['acc', 'auc']
+        else:
+            version = 'all dataset'
+            user_type = 'relationship'
+            target_col = 'salary'
+            model_type = 'large experiments'
+            performance_metric = 'acc'
+            bin_size = 10
+
+    if dataset_name == 'recividism':
+        if not result_analysis:
+            # data settings
+            target_col = 'is_recid'
+            original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text']
+            user_cols = ['race']
+            skip_cols = ['c_charge_desc', 'priors_count']
+            df_max_size = 0
+            hists_already_determined = False
+            # experiment settings
+            train_frac = 0.7
+            valid_frac = 0.2
+            h1_len = 50
+            h2_len = 20000
+            seeds = range(2)
+            inner_seeds = range(2)
+            weights_num = 5
+            weights_range = [0, 1]
+            # model settings
+            model_type = 'tree'
+            max_depth = None
+            ccp_alpha = 0.005
+            ridge_alpha = 0.0001
+            # user settings
+            min_hist_len = 0
+            max_hist_len = 20000
+            metrics = ['acc']
+        else:
+            version = 'with train log'
+            user_type = 'race'
+            target_col = 'is_recid'
+            model_type = 'large experiments'
+            performance_metric = 'acc'
+            bin_size = 10
 
     # dataset_name = "mooc"
     # # data settings
@@ -113,33 +173,6 @@ def get_experiment_parameters(dataset_name):
     # users_to_not_test_on = []
     # only_these_users = []
 
-    if dataset_name == 'recividism':
-        # data settings
-        target_col = 'is_recid'
-        original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text']
-        user_cols = ['race']
-        skip_cols = ['c_charge_desc', 'priors_count']
-        df_max_size = 0
-        hists_already_determined = False
-        # experiment settings
-        train_frac = 0.7
-        valid_frac = 0.2
-        h1_len = 50
-        h2_len = 20000
-        seeds = range(20)
-        inner_seeds = range(20)
-        weights_num = 30
-        weights_range = [0, 1]
-        # model settings
-        model_type = 'tree'
-        max_depth = None
-        ccp_alpha = 0.005
-        ridge_alpha = 0.0001
-        # user settings
-        min_hist_len = 0
-        max_hist_len = 20000
-        metrics = ['acc']
-
     # dataset_name = "hospital_mortality"
     # # data settings
     # target_col = 'HOSPITAL_EXPIRE_FLAG'
@@ -165,6 +198,10 @@ def get_experiment_parameters(dataset_name):
     # users_to_not_test_on = []
     # only_these_users = []
 
-    return [target_col, original_categ_cols, user_cols, skip_cols, hists_already_determined, df_max_size, train_frac,
-            valid_frac, h1_len, h2_len, seeds, inner_seeds, weights_num, weights_range, model_type, max_depth,
-            ccp_alpha, ridge_alpha, min_hist_len, max_hist_len, metrics]
+    if not result_analysis:
+        return [target_col, original_categ_cols, user_cols, skip_cols, hists_already_determined, df_max_size,
+                train_frac,
+                valid_frac, h1_len, h2_len, seeds, inner_seeds, weights_num, weights_range, model_type, max_depth,
+                ccp_alpha, ridge_alpha, min_hist_len, max_hist_len, metrics]
+    else:
+        return version, user_type, target_col, model_type, performance_metric, bin_size
