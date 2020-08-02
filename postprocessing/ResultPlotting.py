@@ -776,7 +776,7 @@ def get_user_distances(log_dir):
     return user_distances
 
 
-def get_best_from_row(rows, models, append_vector=True):
+def get_best_from_row(rows, models):
     bests = []
     for row in rows:
         best_autc = 0
@@ -787,12 +787,9 @@ def get_best_from_row(rows, models, append_vector=True):
                 best_autc = row[model]
                 best_name = model
                 best_idx = i
-        if append_vector:
-            best_vector = [0] * len(models)
-            best_vector[best_idx] = 1
-            bests.append([best_name, best_vector])
-        else:
-            bests.append(best_name)
+        best_vector = [0] * len(models)
+        best_vector[best_idx] = 1
+        bests.append([best_name, best_vector])
     return bests
 
 
@@ -815,6 +812,30 @@ def get_NN_meta_model(X, y, dense_lens):
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['acc'])
     # model.summary()
     return model
+
+
+def make_one_hot(labels, models):
+    rows = []
+    for label in labels:
+        row = [0] * len(models)
+        for i, model in enumerate(models):
+            if label == model:
+                row[i] = 1
+                break
+        rows.append(row)
+    return np.array(rows)
+
+
+def write_meta_learning_summary(log_dir):
+    selected_ccp_alpha = 0.007
+    versions = [
+        'meta-learner split between users selecting best only if best',
+        'meta-learner split between users selecting best from train or valid if better than the other three',
+        'meta-learner split between users selecting best from train or valid only if best',
+    ]
+    performance_cols = ['meta_agent_autc - baseline_autc', 'meta_agent_autc - best_train_autc',
+                        'meta_agent_autc - best_valid_autc', 'meta_agent_autc - golden_standard_autc',
+                        'best_train_success_rate', 'best_valid_success_rate', 'meta_agent_success_rate']
 
 
 def execute_phase(phase, log_set):
@@ -896,7 +917,9 @@ def execute_phase(phase, log_set):
     log_dir = '%s/%s/%s/%s/%s' % (results_dir, dataset, version, user_type, performance_metric)
     models = get_model_dict('jet')
 
-    if add_best:
+    if phase == 'make meta-learning final summary':
+        write_meta_learning_summary(log_dir)
+    elif add_best:
         add_best_model(log_dir, log_set, test_set)
     elif count_best:
         best_count_values(log_dir, log_set)
@@ -980,8 +1003,8 @@ def execute_phase(phase, log_set):
                         # # plt.show()
 
                         y_predicted = meta_model.predict(x_test)
-                        train_acc = meta_model.score(x_train, y_train)
-                        test_acc = meta_model.score(x_test, y_test)
+                        meta_train_acc = meta_model.score(x_train, y_train)
+                        meta_test_acc = meta_model.score(x_test, y_test)
 
                         for row_idx in range(len(train_autcs_seed)):
                             row = train_autcs_seed.iloc[row_idx]
@@ -989,7 +1012,8 @@ def execute_phase(phase, log_set):
                             writer.writerow([row['user'], seed, predicted_label])
 
                         print('seed %d/%d max_depth=%d train_score=%.4f test_score=%.4f'
-                              % (seed_idx + 1, len(seeds), max_depth, train_acc, test_acc))
+                              % (seed_idx + 1, len(seeds), max_depth, meta_train_acc, meta_test_acc))
+
                 elif meta_learning_version == 'meta-learner split between users':
                     meta_dataset = train_autcs[['user', 'len']].copy()
 
@@ -1001,70 +1025,86 @@ def execute_phase(phase, log_set):
 
                     # add best models
                     test_autcs = pd.read_csv('%s/test_bins_autcs.csv' % log_dir)
+                    bests_train_names, bests_valid_names, bests_test_names = [], [], []
+                    bests_train_vectors, bests_valid_vectors, bests_test_vectors = [], [], []
 
                     if meta_learning_task == 'selecting best':
-                        bests_train, bests_valid, bests_test = [], [], []
-                        bests_train_vectors, bests_valid_vectors, bests_test_vectors = [], [], []
                         for row_idx in range(len(train_autcs)):
                             train_row, valid_row, test_row = [
                                 train_autcs.iloc[row_idx], valid_autcs.iloc[row_idx], test_autcs.iloc[row_idx]]
                             train_best, valid_best, test_best = get_best_from_row(
                                 [train_row, valid_row, test_row], models)
                             # append model names
-                            bests_train.append(train_best[0])
-                            bests_valid.append(valid_best[0])
-                            bests_test.append(test_best[0])
+                            bests_train_names.append(train_best[0])
+                            bests_valid_names.append(valid_best[0])
+                            bests_test_names.append(test_best[0])
                             # append one hot vectors
                             bests_train_vectors.append(train_best[1])
                             bests_valid_vectors.append(valid_best[1])
                             bests_test_vectors.append(test_best[1])
-                        meta_dataset['best_train'] = bests_train
-                        meta_dataset['best_valid'] = bests_valid
-                        meta_dataset['best_test'] = bests_test
+
+                        meta_dataset['best_train'] = bests_train_names
+                        meta_dataset['best_valid'] = bests_valid_names
+                        meta_dataset['best_test'] = bests_test_names
                         meta_dataset.to_csv('%s/meta_dataset_ver_1.csv' % log_dir, index=False)
                         X = meta_dataset.drop(columns=['user', 'best_train', 'best_valid', 'best_test']).to_numpy()
                         X = np.concatenate([X, bests_train_vectors, bests_valid_vectors], axis=1)  # encode model names
                         if meta_learning_model == 'NN':
                             y = np.array(bests_test_vectors)
                         else:
-                            y = np.array(bests_test)
+                            y = np.array(bests_test_names)
 
                     elif meta_learning_task == 'selecting best from train or valid':
-                        # score(baseline, train), score(baseline, valid),
-                        # score(best_train, valid) and score(best_valid, train)
                         scores = [[], [], [], []]
-                        # string and vector
                         labels = [[], []]
                         for row_idx in range(len(train_autcs)):
                             train_row, valid_row, test_row = [
                                 train_autcs.iloc[row_idx], valid_autcs.iloc[row_idx], test_autcs.iloc[row_idx]]
                             train_best, valid_best, test_best = get_best_from_row(
-                                [train_row, valid_row, test_row], models, append_vector=False)
+                                [train_row, valid_row, test_row], models)
+                            # append model names
+                            bests_train_names.append(train_best[0])
+                            bests_valid_names.append(valid_best[0])
+                            bests_test_names.append(test_best[0])
+                            # append one hot vectors
+                            bests_train_vectors.append(train_best[1])
+                            bests_valid_vectors.append(valid_best[1])
+                            bests_test_vectors.append(test_best[1])
+
+                            train_best, valid_best, test_best = train_best[0], valid_best[0], test_best[0]
+
                             scores[0].append(train_row['no hist'] / train_row[train_best])
                             scores[1].append(valid_row['no hist'] / valid_row[valid_best])
                             scores[2].append(valid_row[train_best] / valid_row[valid_best])
                             scores[3].append(train_row[valid_best] / train_row[train_best])
 
-                            # if valid_best == test_best:
-                            #     labels[0].append('valid')
-                            #     labels[1].append([0, 0, 1])
-                            # elif train_best == test_best:
-                            #     labels[0].append('train')
-                            #     labels[1].append([0, 1, 0])
-                            # else:
-                            #     labels[0].append('baseline')
-                            #     labels[1].append([1, 0, 0])
-
-                            if test_row[valid_best] >= test_row[train_best]:
-                                if test_row[valid_best] >= test_row['no hist']:  # select valid_best
+                            if meta_mearning_labels == 'only if best':
+                                if valid_best == test_best:
                                     labels[0].append('valid')
                                     labels[1].append([0, 0, 1])
-                                else:  # select baseline
+                                elif train_best == test_best:
+                                    labels[0].append('train')
+                                    labels[1].append([0, 1, 0])
+                                else:
                                     labels[0].append('baseline')
                                     labels[1].append([1, 0, 0])
-                            else:  #
-
-
+                            elif meta_mearning_labels == 'if better than the other three':
+                                baseline_is_best = False
+                                if test_row[valid_best] >= test_row[train_best]:
+                                    if test_row[valid_best] >= test_row['no hist']:
+                                        labels[0].append('valid')
+                                        labels[1].append([0, 0, 1])
+                                    else:
+                                        baseline_is_best = True
+                                else:  # train_best > valid_best
+                                    if test_row[train_best] >= test_row['no hist']:
+                                        labels[0].append('train')
+                                        labels[1].append([0, 1, 0])
+                                    else:
+                                        baseline_is_best = True
+                                if baseline_is_best:
+                                    labels[0].append('baseline')
+                                    labels[1].append([1, 0, 0])
 
                         meta_dataset['score(baseline, train)'] = scores[0]
                         meta_dataset['score(baseline, valid)'] = scores[1]
@@ -1092,19 +1132,56 @@ def execute_phase(phase, log_set):
                     ccp_alphas += [i / 100 for i in range(1, 10)]
                     ccp_alphas += [i / 10 for i in range(1, 10)]
 
+                    hist_lens = test_autcs['len'].to_numpy()
+                    test_autcs = test_autcs[models].to_numpy()
+                    bests_train_vectors = np.array(bests_train_vectors)
+                    bests_valid_vectors = np.array(bests_valid_vectors)
+                    bests_test_vectors = np.array(bests_test_vectors)
+
                     for fold_idx, fold in enumerate(k_fold_cross_validation.split(users)):
                         train_index, test_index = get_sample_indexes_from_user_indexes(fold, num_seeds)
                         X_train, y_train = X[train_index], y[train_index]
                         X_test, y_test = X[test_index], y[test_index]
+                        hist_lens_fold = hist_lens[test_index]
+                        test_autcs_fold = test_autcs[test_index]
+                        bests_train_vectors_fold = bests_train_vectors[test_index]
+                        bests_valid_vectors_fold = bests_valid_vectors[test_index]
+                        bests_test_vectors_fold = bests_test_vectors[test_index]
 
-                        if meta_learning_model == 'AdaBoost':
+                        if meta_weighted_average:
+                            weights = hist_lens_fold
+                        else:
+                            weights = [1] * len(hist_lens_fold)
+
+                        baseline_autcs = test_autcs_fold[:, 0]
+                        baseline_autc = np.average(baseline_autcs, weights=weights)
+                        baseline_acc = np.average(bests_test_vectors_fold[:, 0], weights=weights)
+
+                        best_train_autcs = np.sum(test_autcs_fold * bests_train_vectors_fold, axis=1)
+                        best_train_autc = np.average(best_train_autcs, weights=weights)
+                        best_train_success_rate = np.mean(best_train_autcs - baseline_autcs >= 0)
+                        best_train_acc = np.average(
+                            np.sum(bests_test_vectors_fold * bests_train_vectors_fold, axis=1), weights=weights)
+
+                        best_valid_autcs = np.sum(test_autcs_fold * bests_valid_vectors_fold, axis=1)
+                        best_valid_autc = np.average(best_valid_autcs, weights=weights)
+                        best_valid_success_rate = np.mean(best_valid_autcs - baseline_autcs >= 0)
+                        best_valid_acc = np.average(
+                            np.sum(bests_test_vectors_fold * bests_valid_vectors_fold, axis=1), weights=weights)
+
+                        golden_standard_autc = np.average(
+                            np.sum(test_autcs_fold * bests_test_vectors_fold, axis=1), weights=weights)
+                        golden_standard_acc = np.average(
+                            np.sum(bests_test_vectors_fold * bests_test_vectors_fold, axis=1), weights=weights)
+
+                        if meta_learning_model == 'tree':
                             # meta_model = AdaBoostClassifier(DecisionTreeClassifier(min_samples_leaf=10, random_state=1),
                             #                                 n_estimators=200, learning_rate=1, random_state=1)
                             # meta_model.fit(X_train, y_train)
 
-                            label_names, label_counts = np.unique(y_test, return_counts=True)
-                            test_fractions = pd.DataFrame(label_counts.reshape(1, 3) / np.sum(label_counts),
-                                                          columns=label_names)
+                            # label_names, label_counts = np.unique(y_test, return_counts=True)
+                            # test_fractions = pd.DataFrame(label_counts.reshape(1, 3) / np.sum(label_counts),
+                            #                               columns=label_names)
 
                             print('fold=%d' % (fold_idx + 1))
                             for ccp_alpha in ccp_alphas:
@@ -1118,33 +1195,65 @@ def execute_phase(phase, log_set):
                                 # plt.savefig('meta_tree', dpi=200)
                                 # # plt.show()
 
-                                train_acc = meta_model.score(X_train, y_train)
-                                test_acc = meta_model.score(X_test, y_test)
+                                meta_train_acc = meta_model.score(X_train, y_train)
+                                meta_test_acc = meta_model.score(X_test, y_test)
+                                y_pred = meta_model.predict(X_test)
 
-                                meta_learning_results.append(
-                                    [fold_idx, test_fractions['baseline'][0], test_fractions['train'][0],
-                                     test_fractions['valid'][0], ccp_alpha, train_acc, test_acc])
-                            # break
+                                if meta_learning_task == 'selecting best':  # pred is one of 9 models
+                                    meta_agent_vectors_fold = make_one_hot(y_pred, models)
+                                else:
+                                    meta_agent_vectors_fold = []
+                                    for i, label in enumerate(y_pred):
+                                        if label == 'baseline':
+                                            meta_agent_vectors_fold.append([1, 0, 0, 0, 0, 0, 0, 0, 0])
+                                        elif label == 'train':
+                                            meta_agent_vectors_fold.append(list(bests_train_vectors_fold[i]))
+                                        elif label == 'valid':
+                                            meta_agent_vectors_fold.append(list(bests_valid_vectors_fold[i]))
+                                    meta_agent_vectors_fold = np.array(meta_agent_vectors_fold)
+
+                                meta_agent_autcs = np.sum(test_autcs_fold * meta_agent_vectors_fold, axis=1)
+                                meta_agent_autc = np.average(meta_agent_autcs, weights=weights)
+                                meta_agent_success_rate = np.mean(meta_agent_autcs - baseline_autcs >= 0)
+                                meta_acc = np.average(
+                                    np.sum(bests_test_vectors_fold * meta_agent_vectors_fold, axis=1), weights=weights)
+
+                                row = [fold_idx, ccp_alpha, meta_train_acc, meta_test_acc, baseline_autc,
+                                       best_train_autc, best_valid_autc, meta_agent_autc, golden_standard_autc,
+                                       baseline_acc, best_train_acc, best_valid_acc, meta_acc, golden_standard_acc,
+                                       meta_agent_autc - baseline_autc, meta_agent_autc - best_train_autc,
+                                       meta_agent_autc - best_valid_autc, meta_agent_autc - golden_standard_autc,
+                                       best_train_success_rate, best_valid_success_rate, meta_agent_success_rate]
+                                meta_learning_results.append(row)
 
                         elif meta_learning_model == 'NN':
                             meta_model = get_NN_meta_model(X, y, [5])
                             history = meta_model.fit(X_train, y_train, batch_size=100, epochs=200, verbose=2)
-                            train_loss, train_acc = meta_model.evaluate(X_train, y_train, verbose=0)
-                            test_loss, test_acc = meta_model.evaluate(X_test, y_test, verbose=0)
+                            train_loss, meta_train_acc = meta_model.evaluate(X_train, y_train, verbose=0)
+                            test_loss, meta_test_acc = meta_model.evaluate(X_test, y_test, verbose=0)
 
-                            y_proba = meta_model.predict(X_test)
-                            matrix = confusion_matrix(y_test.argmax(1), y_proba.argmax(1))
-                            print(matrix)
+                            # y_proba = meta_model.predict(X_test)
+                            # matrix = confusion_matrix(y_test.argmax(1), y_proba.argmax(1))
+                            # print(matrix)
 
-                        # print('fold %d train_acc=%.4f test_acc=%.4f | baselines=%.4f best_trains=%.4f best_valids=%.4f'
-                        #       % (fold_idx + 1, train_acc, test_acc, test_fractions['baseline'],
-                        #          test_fractions['train'], test_fractions['valid']))
+                            meta_learning_results.append(
+                                [fold_idx, test_fractions['baseline'][0], test_fractions['train'][0],
+                                 test_fractions['valid'][0], ccp_alpha, meta_train_acc, meta_test_acc])
 
-                        # break
-                    pd.DataFrame(meta_learning_results,
-                                 columns=['fold', 'baselines_fraction', 'best_trains_fraction', 'best_valids_fraction',
-                                          'ccp_alpha', 'train_acc', 'test_acc']).to_csv(
-                        '%s/meta_learning_results.csv' % log_dir, index=False)
+                    result_cols = ['fold', 'ccp_alpha', 'meta_train_acc', 'meta_test_acc', 'baseline_autc',
+                                   'best_train_autc', 'best_valid_autc', 'meta_agent_autc', 'golden_standard_autc',
+                                   'baseline_acc', 'best_train_acc', 'best_valid_acc', 'meta_test_acc',
+                                   'golden_standard_acc', 'meta_agent_autc - baseline_autc',
+                                   'meta_agent_autc - best_train_autc', 'meta_agent_autc - best_valid_autc',
+                                   'meta_agent_autc - golden_standard_autc', 'best_train_success_rate',
+                                   'best_valid_success_rate', 'meta_agent_success_rate']
+                    df = pd.DataFrame(meta_learning_results, columns=result_cols)
+                    title = '%s %s %s' % (meta_learning_version, meta_learning_task, meta_mearning_labels)
+                    if meta_weighted_average:
+                        title += ' weighted'
+                    df.to_csv('%s/%s.csv' % (log_dir, title), index=False)
+                    df.groupby('ccp_alpha').mean().to_csv('%s/%s summary_avg.csv' % (log_dir, title))
+                    df.groupby('ccp_alpha').std().to_csv('%s/%s summary_std.csv' % (log_dir, title))
         else:
             users_dir = '%s/users_%s' % (log_dir, log_set)
             user_logs_dir = '%s/logs' % users_dir
@@ -1239,11 +1348,12 @@ if use_autoML:
         # 'get autcs averaged over inner seeds for train bins',
         # 'get autcs averaged over inner seeds for validation bins',
         # 'get autcs averaged over inner seeds for test bins',
-        'get best for each user',
+        # 'get best for each user',
+        'make meta-learning final summary'
+
         # 'add best_u computed from validation to binarized test results',
         # 'generate averaged plots for binarized test results with best',
         # 'create test summary',
-
         # 'generate averaged plots for binarized train results',
         # 'generate averaged plots for binarized validation results with best',
         # 'get autcs averaged over inner seeds for test bins with best',
@@ -1268,26 +1378,37 @@ else:
 add_parametrized_models = True
 num_normalization_bins = 20
 compare_by_percentage = True
+
 # meta_learning_version = 'best from validation'
 # meta_learning_version = 'generalize train to validation'
 # meta_learning_version = 'meta-learner split within users'
 meta_learning_version = 'meta-learner split between users'
+
 # meta_learning_task = 'selecting best'
 meta_learning_task = 'selecting best from train or valid'
+
+# meta_mearning_labels = 'only if best'
+meta_mearning_labels = 'if better than the other three'
+
+meta_weighted_average = False
+# meta_weighted_average = True
+
+meta_learning_model = 'tree'
 # meta_learning_model = 'NN'
-meta_learning_model = 'AdaBoost'
+
 meta_cross_validation_splits = 10
+
 # summary_metrics = ['avg', 'std', 'paired_ttest']
 summary_metrics = ['avg']
+
 log_set = 'test_bins_with_best'
 
+# dont touch this
 if meta_learning_model == 'NN':
     from keras.models import Model
     from keras.layers import Dense, Input
-
 version, user_type, target_col, model_type, performance_metric, bin_size = get_experiment_parameters(dataset, True)
 print('dataset = %s' % dataset)
 for phase in phases:
     execute_phase(phase, log_set)
-
 print('\ndone')
