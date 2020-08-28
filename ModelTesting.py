@@ -8,6 +8,8 @@ from sklearn.preprocessing import MinMaxScaler
 import category_encoders as ce
 import Models
 from ExperimentChooser import get_experiment_parameters
+import matplotlib.pyplot as plt
+from joblib import dump
 
 
 def safe_make_dir(path):
@@ -33,25 +35,44 @@ def get_time_string(time_in_seconds):
     return eta_string
 
 
+def save_model_details(user, model, name, diss_weight, x, y):
+    with open(model_analysis_path, 'a', newline='') as file:
+        writer = csv.writer(file)
+        row = [seed, inner_seed, user, name, diss_weight, x, y]
+        feature_ids = model.predictor.tree_.feature
+        thresholds = model.predictor.tree_.threshold
+        features = all_columns[feature_ids[feature_ids >= 0]]  # extract feature names
+        thresholds = thresholds[feature_ids >= 0]
+        for feature, threshold in zip(features, thresholds):
+            writer.writerow(row + [feature, threshold])
+
+
 if __name__ == "__main__":
 
     machine = 'PC'
     # machine = 'LIGHTSAIL'
     # machine = 'BGU-VPN'
 
-    dataset_name = 'assistment'
+    # dataset_name = 'assistment'
     # dataset_name = 'ednet'
     # dataset_name = 'salaries'
-    # dataset_name = 'recividism'
+    dataset_name = 'recividism'
 
     # experiment settings
     chrono_split = False
     balance_histories = False
+    normalize_numeric_features = False
 
     # output settings
     make_tradeoff_plots = False
     show_tradeoff_plots = False
     plot_confusion = False
+
+    model_analysis_mode = True
+    save_models = True
+    # analyze_user = 'Husband'
+    # analyze_user = 75169
+    analyze_user = 'African-American'
 
     target_col, original_categ_cols, user_cols, skip_cols, hists_already_determined, df_max_size, train_frac, valid_frac, \
     h1_len, h2_len, seeds, inner_seeds, weights_num, weights_range, model_type, max_depth, ccp_alpha, ridge_alpha, \
@@ -84,6 +105,11 @@ if __name__ == "__main__":
     diss_weights = (diss_weights * (weights_range[1] - weights_range[0]) + weights_range[0]).tolist()
     model_names = list(models_to_test.keys())
 
+    # colors for plotting
+    if model_analysis_mode:
+        cmap = plt.cm.get_cmap('jet')
+        colors = ['black'] + [cmap(i / (len(models_to_test) + 1)) for i in range(1, len(models_to_test))]
+
     # skip cols
     user_cols_not_skipped = []
     for user_col in user_cols:
@@ -103,11 +129,16 @@ if __name__ == "__main__":
         with open('%s/parameters.csv' % result_dir, 'w', newline='') as file_out:
             writer = csv.writer(file_out)
             writer.writerow(['train_frac', 'valid_frac', 'ccp_alpha', 'dataset_max_size', 'h1_len', 'h2_len', 'seeds',
-                             'inner_seeds', 'weights_num', 'weights_range', 'min_hist_len', 'max_hist_len', 'chrono_split',
+                             'inner_seeds', 'weights_num', 'weights_range', 'min_hist_len', 'max_hist_len',
+                             'chrono_split',
                              'balance_histories', 'skip_cols', 'model_type'])
-            writer.writerow([train_frac, valid_frac, ccp_alpha, df_max_size, h1_len, h2_len, len(seeds), len(inner_seeds),
-                             weights_num, str(weights_range), min_hist_len, max_hist_len, chrono_split, balance_histories,
-                             str(skip_cols), model_type])
+            writer.writerow(
+                [train_frac, valid_frac, ccp_alpha, df_max_size, h1_len, h2_len, len(seeds), len(inner_seeds),
+                 weights_num, str(weights_range), min_hist_len, max_hist_len, chrono_split, balance_histories,
+                 str(skip_cols), model_type])
+    header = ['user', 'len', 'seed', 'inner_seed', 'h1_acc', 'weight']
+    for model_name in model_names:
+        header.extend(['%s x' % model_name, '%s y' % model_name])
 
     # run whole experiment for each user column selection
     for user_col in user_cols:
@@ -119,9 +150,6 @@ if __name__ == "__main__":
         if not os.path.exists(result_type_dir):
             for metric in metrics:
                 os.makedirs('%s/%s' % (result_type_dir, metric))
-            header = ['user', 'len', 'seed', 'inner_seed', 'h1_acc', 'weight']
-            for model_name in model_names:
-                header.extend(['%s x' % model_name, '%s y' % model_name])
             for metric in metrics:
                 for subset in ['train', 'valid', 'test']:
                     with open('%s/%s/%s_log.csv' % (result_type_dir, metric, subset), 'w', newline='') as file:
@@ -222,16 +250,27 @@ if __name__ == "__main__":
                         for user_id, hist in sorted_hists:
                             hist[user_col] = [user_id] * len(hist)
                             seed_df = seed_df.append(hist, sort=False)
-                        seed_df.to_csv('%s/%d.csv' % (cache_dir, seed), index=False)
+                        # seed_df.to_csv('%s/%d.csv' % (cache_dir, seed), index=False)
+                        seed_df.to_csv('%s/0.csv' % cache_dir, index=False)
                     if not balance_histories:
                         break
                 del groups_by_user
                 del hists
         # end of making seed caches
 
+        # for ccp_alpha in ccp_alphas:
         print("determine experiment's users...")
         min_max_col_values = pd.read_csv('%s/all_columns.csv' % cache_dir, dtype=np.int64)
         all_columns = min_max_col_values.columns
+
+        if model_analysis_mode:
+            model_analysis_dir = '%s/model_analysis' % result_type_dir
+            os.makedirs('%s/plots' % model_analysis_dir)
+            os.makedirs('%s/models' % model_analysis_dir)
+            model_analysis_path = '%s/analysis.csv' % model_analysis_dir
+            pd.DataFrame(columns=['seed', 'inner_seed', 'user', 'model', 'weight', 'x', 'y', 'feature', 'split']).to_csv(
+                model_analysis_path, index=False)
+
         groups_by_user = pd.read_csv('%s/0.csv' % cache_dir).groupby(user_col, sort=False)
         hists_by_user = {}
         hist_train_ranges = {}
@@ -263,7 +302,8 @@ if __name__ == "__main__":
 
         min_max_col_values = min_max_col_values.reset_index(drop=True)
         scaler, labelizer = MinMaxScaler(), LabelBinarizer()
-        scaler.fit(min_max_col_values.drop(columns=[target_col]), min_max_col_values[[target_col]])
+        if normalize_numeric_features:
+            scaler.fit(min_max_col_values.drop(columns=[target_col]), min_max_col_values[[target_col]])
         labelizer.fit(min_max_col_values[[target_col]])
         del min_max_col_values
 
@@ -290,7 +330,10 @@ if __name__ == "__main__":
             for user_id, hist in hists_by_user.items():
                 hist_train_and_valid = hist.sample(n=int(len(hist) * (train_frac + valid_frac)), random_state=seed)
                 hist_test = hist.drop(hist_train_and_valid.index).reset_index(drop=True)
-                hist_test_x = scaler.transform(hist_test.drop(columns=[target_col]))
+                if normalize_numeric_features:
+                    hist_test_x = scaler.transform(hist_test.drop(columns=[target_col]))
+                else:
+                    hist_test_x = hist_test.drop(columns=[target_col])
                 hist_test_y = labelizer.transform(hist_test[[target_col]])
                 hists_seed_by_user[user_id] = [hist_train_and_valid, hist_test_x, hist_test_y]
 
@@ -317,7 +360,10 @@ if __name__ == "__main__":
                     hist_valid = hist_train_and_valid.drop(hist_train.index)
                     h2_train = h2_train.append(hist_train, ignore_index=True, sort=False)
                     hists_inner_seed_by_user[user_id] = [hist_train, hist_valid, hist_test_x, hist_test_y]
-                h2_train_x = scaler.transform(h2_train.drop(columns=[target_col]))
+                if normalize_numeric_features:
+                    h2_train_x = scaler.transform(h2_train.drop(columns=[target_col]))
+                else:
+                    h2_train_x = h2_train.drop(columns=[target_col])
                 h2_train_y = labelizer.transform(h2_train[[target_col]])
 
                 # train h1 and baseline
@@ -325,16 +371,18 @@ if __name__ == "__main__":
                                       ccp_alpha=ccp_alpha, max_depth=max_depth, ridge_alpha=ridge_alpha)
                 no_hists = []
                 for weight in diss_weights:
-                    no_hists.append(
-                        Models.get_model(model_type, h2_train_x, h2_train_y, subset_weights=[1, 1, 0, 0], old_model=h1,
-                                         diss_weight=weight, ccp_alpha=ccp_alpha, max_depth=max_depth,
-                                         ridge_alpha=ridge_alpha))
+                    no_hist = Models.get_model(model_type, h2_train_x, h2_train_y, subset_weights=[1, 1, 0, 0],
+                                               old_model=h1, diss_weight=weight, ccp_alpha=ccp_alpha,
+                                               max_depth=max_depth, ridge_alpha=ridge_alpha)
+                    no_hists.append(no_hist)
+
                 # run experiment for each user in inner seed
                 user_count = 0
                 for user_id, item in hists_inner_seed_by_user.items():
                     iteration += 1
                     user_count += 1
-                    if user_count <= done_last_users:
+                    if user_count <= done_last_users or (model_analysis_mode and user_id != analyze_user):
+                    # if user_count <= done_last_users:
                         continue
                     start_time = int(round(time() * 1000))
 
@@ -342,9 +390,13 @@ if __name__ == "__main__":
                     hist_train, hist_valid, hist_test_x, hist_test_y = item
                     hist_train_range = hist_train_ranges[user_id][0]
                     hist_len = len(hist_train) + len(hist_valid) + len(hist_test)
-                    hist_train_x = scaler.transform(hist_train.drop(columns=[target_col]))
+                    if normalize_numeric_features:
+                        hist_train_x = scaler.transform(hist_train.drop(columns=[target_col]))
+                        hist_valid_x = scaler.transform(hist_valid.drop(columns=[target_col]))
+                    else:
+                        hist_train_x = hist_train.drop(columns=[target_col])
+                        hist_valid_x = hist_valid.drop(columns=[target_col])
                     hist_train_y = labelizer.transform(hist_train[[target_col]])
-                    hist_valid_x = scaler.transform(hist_valid.drop(columns=[target_col]))
                     hist_valid_y = labelizer.transform(hist_valid[[target_col]])
 
                     # train all models
@@ -368,26 +420,64 @@ if __name__ == "__main__":
                     for metric in metrics:
                         rows_by_subset = []
                         rows_by_metric.append(rows_by_subset)
-                        for subset in ['train', 'valid', 'test']:
+                        if model_analysis_mode:
+                            subsets = ['test']
+                        else:
+                            subsets = ['train', 'valid', 'test']
+                        for subset in subsets:
                             x, y = eval('hist_%s_x' % subset), eval('hist_%s_y' % subset)
                             rows = []
                             rows_by_subset.append(rows)
                             h1_y = h1.test(x, y, metric)['y']
+                            if model_analysis_mode:
+                                save_model_details(user_id, h1, 'h1', weight, 1, h1_y)
                             for weight_idx, weight in enumerate(diss_weights):
                                 models = models_by_weight[weight_idx]
                                 row = [user_id, hist_len, seed, inner_seed, h1_y, weight]
-                                for model in models:
+                                for i, model in enumerate(models):
                                     result = model.test(x, y, metric)
-                                    row.extend([result['x'], result['y']])
+                                    com, acc = result['x'], result['y']
+                                    row.extend([com, acc])
+                                    if model_analysis_mode:
+                                        save_model_details(user_id, model, model_names[i], weight, com, acc)
+                                        if save_models:
+                                            title = 'user_%s fold_%s inner_fold_%s model_%s diss_w_%.2f com_%.3f acc_%.3f' % (
+                                                user_id, seed, inner_seed, model_names[i], weight, com, acc)
+                                            dump(model, '%s/models/%s.joblib' % (model_analysis_dir, title))
                                 rows.append(row)
 
-                    # write rows to all logs in one go to avoid discrepancies between logs
-                    for metric_idx, metric in enumerate(metrics):
-                        for subset_idx, subset in enumerate(['train', 'valid', 'test']):
-                            with open('%s/%s/%s_log.csv' % (result_type_dir, metric, subset), 'a', newline='') as file:
-                                writer = csv.writer(file)
-                                for row in rows_by_metric[metric_idx][subset_idx]:
-                                    writer.writerow(row)
+                            if model_analysis_mode:
+                                df_plot = pd.DataFrame(rows, columns=header)
+                                # df_plot.to_csv('cache/user_%s fold_%s inner_fold_%s plot.csv'
+                                #                % (user_id, seed, inner_seed), index=False)
+
+                                x_vals = df_plot[['%s x' % i for i in model_names]].to_numpy()
+                                min_x, max_x = np.min(x_vals), np.max(x_vals)
+                                plt.plot([min_x, max_x], [h1_y, h1_y], 'k--', marker='.', label='pre-update')
+                                markersize = 30
+                                linewidth = 9
+                                for model_name, color in zip(model_names, colors):
+                                    x_plot, y_plot = df_plot['%s x' % model_name], df_plot['%s y' % model_name]
+                                    plt.plot(x_plot, y_plot, label=model_name, color=color, marker='.',
+                                             markersize=markersize, linewidth=linewidth)
+                                    markersize -= 3
+                                    linewidth -= 1
+                                plt.legend()
+                                plt.xlabel('compatibility')
+                                plt.ylabel('accuracy')
+                                plt.title('user=%s fold=%s inner_fold=%s' % (user_id, seed, inner_seed))
+                                plt.savefig('%s/plots/user_%s fold_%s inner_fold_%s plot.png'
+                                            % (model_analysis_dir, user_id, seed, inner_seed), bbox_inches='tight')
+                                plt.show()
+
+                    if not model_analysis_mode:
+                        # write rows to all logs in one go to avoid discrepancies between logs
+                        for metric_idx, metric in enumerate(metrics):
+                            for subset_idx, subset in enumerate(['train', 'valid', 'test']):
+                                with open('%s/%s/%s_log.csv' % (result_type_dir, metric, subset), 'a', newline='') as file:
+                                    writer = csv.writer(file)
+                                    for row in rows_by_metric[metric_idx][subset_idx]:
+                                        writer.writerow(row)
 
                     # end iteration
                     runtime = (round(time() * 1000) - start_time) / 1000
@@ -396,7 +486,8 @@ if __name__ == "__main__":
                     runtime_string = get_time_string(runtime)
                     eta = get_time_string((iterations - iteration) * avg_runtime)
                     progress_row = '%d/%d\tseed=%d/%d \tinner_seed=%d/%d \tuser=%d/%d \ttime=%s \tETA=%s' % \
-                                   (iteration, iterations, seed_idx + 1, len(seeds), inner_seed_idx + 1, len(inner_seeds),
+                                   (iteration, iterations, seed_idx + 1, len(seeds), inner_seed_idx + 1,
+                                    len(inner_seeds),
                                     user_count, len(hists_by_user), runtime_string, eta)
                     with open('%s/progress_log.txt' % result_type_dir, 'a') as file:
                         file.write('%s\n' % progress_row)
@@ -405,5 +496,11 @@ if __name__ == "__main__":
             # end inner seed loop
         # end seed loop
     # end user type loop
+
+    # if show_final_plots:
+    #     log_dir = '%s/acc' % result_type_dir
+    #     models_for_plotting = get_model_dict('jet')
+    #     plot_results(log_dir, dataset_name, user_col, models_for_plotting, 'test', show_tradeoff_plots=True,
+    #                  prefix=ccp_alpha)
 
     print('\ndone')

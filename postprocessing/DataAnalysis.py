@@ -173,6 +173,7 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col):
                     hist_train, hist_valid, hist_test = item
                     hist_len = len(hist_train) + len(hist_valid) + len(hist_test)
                     row = [user_id, hist_len, seed, inner_seed]
+
                     # dist = [wasserstein_distance(hist_train[col], h2_train_x[col]) for col in x_cols]
                     # row.append(np.average(dist, weights=feature_importances))
                     # for hist_1 in [hist_train, h2_train_x]:
@@ -180,11 +181,13 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col):
                     #         dist = [wasserstein_distance(hist_1[col], hist_2[col]) for col in x_cols]
                     #         row.append(np.average(dist, weights=feature_importances))
 
-                    # for i, j in itertools.combinations([h2_train_x, hist_train, hist_valid, hist_test], 2):
-                    #     dist = [wasserstein_distance(i[col], j[col]) for col in x_cols]
-                    #     row.append(np.average(dist, weights=feature_importances))
-                    dist = [wasserstein_distance(hist_valid[col], hist_test[col]) for col in x_cols]
-                    row.append(np.average(dist, weights=feature_importances))
+                    for i, j in itertools.combinations([h2_train_x, hist_train, hist_valid, hist_test], 2):
+                        dist = [wasserstein_distance(i[col], j[col]) for col in x_cols]
+                        row.append(np.average(dist, weights=feature_importances))
+
+                    # dist = [wasserstein_distance(hist_valid[col], hist_test[col]) for col in x_cols]
+                    # row.append(np.average(dist, weights=feature_importances))
+
                     writer.writerow(row)
 
                     runtime = (round(time() * 1000) - start_time) / 1000

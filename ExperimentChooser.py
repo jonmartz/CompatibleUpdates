@@ -9,7 +9,8 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
             target_col = 'correct'
             original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type']
             user_cols = ['user_id']
-            skip_cols = ['skill']
+            # skip_cols = ['skill']
+            skip_cols = []
             df_max_size = 0
             hists_already_determined = True
             # experiment settings
@@ -17,12 +18,12 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
             valid_frac = 0.2
             h1_len = 50
             h2_len = 50000
-            seeds = [10]
-            inner_seeds = [10]
-            weights_num = 20
+            seeds = range(5)
+            inner_seeds = [0]
+            weights_num = 10
             weights_range = [0, 1]
             # model settings
-            model_type = 'ridge'
+            model_type = 'tree'
             max_depth = None
             ccp_alpha = 0.005
             ridge_alpha = 0.0001
@@ -31,7 +32,7 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
             max_hist_len = 100000
             metrics = ['acc']
         else:
-            version = 'with train log'
+            version = 'meta-learning'
             user_type = 'user_id'
             target_col = 'correct'
             model_type = 'large experiments'
@@ -89,20 +90,21 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
             valid_frac = 0.2
             h1_len = 20
             h2_len = 50000
-            seeds = range(2)
-            inner_seeds = range(2)
-            weights_num = 5
+            seeds = [14]
+            inner_seeds = range(1)
+            weights_num = 20
             weights_range = [0, 1]
             # model settings
+            model_type = 'tree'
             max_depth = None
             ccp_alpha = 0.008
             ridge_alpha = 0.0001
             # user settings
             min_hist_len = 50
             max_hist_len = 50000
-            metrics = ['acc', 'auc']
+            metrics = ['acc']
         else:
-            version = 'all dataset'
+            version = 'meta-learning'
             user_type = 'relationship'
             target_col = 'salary'
             model_type = 'large experiments'
@@ -113,9 +115,10 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         if not result_analysis:
             # data settings
             target_col = 'is_recid'
-            original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text']
+            original_categ_cols = ['sex', 'race', 'age_cat', 'c_charge_degree', 'score_text', 'c_charge_desc']
             user_cols = ['race']
-            skip_cols = ['c_charge_desc', 'priors_count']
+            # skip_cols = ['c_charge_desc', 'priors_count']
+            skip_cols = ['score_text', 'age_cat']
             df_max_size = 0
             hists_already_determined = False
             # experiment settings
@@ -123,9 +126,9 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
             valid_frac = 0.2
             h1_len = 50
             h2_len = 20000
-            seeds = range(2)
-            inner_seeds = range(2)
-            weights_num = 5
+            seeds = [5]
+            inner_seeds = range(1)
+            weights_num = 20
             weights_range = [0, 1]
             # model settings
             model_type = 'tree'
@@ -137,7 +140,7 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
             max_hist_len = 20000
             metrics = ['acc']
         else:
-            version = 'with train log'
+            version = 'meta-learning'
             user_type = 'race'
             target_col = 'is_recid'
             model_type = 'large experiments'

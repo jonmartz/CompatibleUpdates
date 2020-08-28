@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.tree import DecisionTreeRegressor
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
 from sklearn.linear_model import Ridge
 from sklearn.metrics import roc_auc_score
 
@@ -73,7 +73,8 @@ class CompatibleRegressionTree(Model):
                  old_model=None, diss_weight=None, hist_range=None):
         super().__init__(model_name, old_model, diss_weight, subset_weights, hist_range)
         self.ccp_alpha = ccp_alpha
-        self.predictor = DecisionTreeRegressor(max_depth=max_depth, random_state=1, ccp_alpha=ccp_alpha)
+        self.predictor = DecisionTreeClassifier(max_depth=max_depth, random_state=1, ccp_alpha=ccp_alpha)
+        # self.predictor = DecisionTreeRegressor(max_depth=max_depth, random_state=1, ccp_alpha=ccp_alpha)
         self.predictor.fit(x_train, y_train, sample_weight=self.get_sample_weights(x_train, y_train))
 
 
