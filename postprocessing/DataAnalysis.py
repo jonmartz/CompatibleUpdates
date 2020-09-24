@@ -92,8 +92,9 @@ def make_data_analysis(log_dir, dataset, user_col, target_col):
     pd.DataFrame(df_dict).to_csv('%s/feature_importances.csv' % log_dir, index=False)
 
 
-def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col):
-    if os.path.exists('%s/distances.csv' % log_dir):
+def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col, min_hist_len_to_test,
+                                      file_name='user_features', num_top_features=5):
+    if os.path.exists('%s/%s.csv' % (log_dir, file_name)):
         return
     # get cached dataset
     cache, params = get_cache_and_params(log_dir, user_col)
@@ -105,37 +106,50 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col):
 
     print("loading users...")
     all_cols = pd.read_csv('%s/all_columns.csv' % cache_dir).columns
-    x_cols = list(all_cols.drop(target_col))
+    features = list(all_cols.drop(target_col))
     dataset = pd.read_csv('%s/0.csv' % cache_dir)
     users_col = dataset[user_col]
 
+    # normalize dataset
     dataset = MinMaxScaler().fit_transform(dataset.drop(columns=user_col))
     dataset = pd.DataFrame(dataset, columns=all_cols)
+
+    # get top n features
+    baseline = DecisionTreeRegressor(random_state=1, ccp_alpha=0)  # todo: maybe set to ccp_alpha
+    baseline.fit(dataset.drop(columns=target_col), dataset[target_col])
+    feature_importances = baseline.feature_importances_
+    sorted_features = [i for _, i in reversed(sorted(zip(feature_importances, features)))]
+    top_features = sorted_features[:num_top_features]
+
     dataset.insert(0, user_col, users_col)
     del users_col
 
     groups_by_user = dataset.groupby(user_col, sort=False)
     hists_by_user = {}
     hist_train_lens = {}
+    num_users_to_test = 0
     for user_id, hist in groups_by_user:
         hist = hist.drop(columns=[user_col])
         if len(hist) > max_hist_len:
             hist = hist[:max_hist_len]
+        if len(hist) >= min_hist_len_to_test:
+            num_users_to_test += 1
         hist_train_lens[user_id] = int(len(hist) * train_frac)
         hists_by_user[user_id] = hist
     del groups_by_user
 
     print('start analysis')
-    iterations = len(seeds) * len(inner_seeds) * len(hists_by_user)
+    iterations = len(seeds) * len(inner_seeds) * num_users_to_test
     iteration = 0
     avg_runtime = 0
     num_runtimes = 0
-    with open('%s/distances.csv' % log_dir, 'w', newline='') as file:
+    with open('%s/%s.csv' % (log_dir, file_name), 'w', newline='') as file:
         writer = csv.writer(file)
         row = ['user', 'len', 'seed', 'inner_seed']
         for i, j in itertools.combinations(['all_train', 'hist_train', 'hist_valid', 'hist_test'], 2):
             row.append('%s to %s' % (i, j))
-        writer.writerow(row)
+
+        writer.writerow(row + top_features)
 
         for seed_idx, seed in enumerate(seeds):
             # split the test sets
@@ -166,29 +180,23 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col):
 
                 user_count = 0
                 for user_id, item in hists_inner_seed_by_user.items():
+                    hist_train, hist_valid, hist_test = item
+                    hist_len = len(hist_train) + len(hist_valid) + len(hist_test)
+                    if hist_len < min_hist_len_to_test:
+                        break
+
                     start_time = int(round(time() * 1000))
                     iteration += 1
                     user_count += 1
 
-                    hist_train, hist_valid, hist_test = item
-                    hist_len = len(hist_train) + len(hist_valid) + len(hist_test)
                     row = [user_id, hist_len, seed, inner_seed]
-
-                    # dist = [wasserstein_distance(hist_train[col], h2_train_x[col]) for col in x_cols]
-                    # row.append(np.average(dist, weights=feature_importances))
-                    # for hist_1 in [hist_train, h2_train_x]:
-                    #     for hist_2 in [hist_valid, hist_test]:
-                    #         dist = [wasserstein_distance(hist_1[col], hist_2[col]) for col in x_cols]
-                    #         row.append(np.average(dist, weights=feature_importances))
-
+                    # add wasserstein distances
                     for i, j in itertools.combinations([h2_train_x, hist_train, hist_valid, hist_test], 2):
-                        dist = [wasserstein_distance(i[col], j[col]) for col in x_cols]
+                        dist = [wasserstein_distance(i[col], j[col]) for col in features]
                         row.append(np.average(dist, weights=feature_importances))
-
-                    # dist = [wasserstein_distance(hist_valid[col], hist_test[col]) for col in x_cols]
-                    # row.append(np.average(dist, weights=feature_importances))
-
-                    writer.writerow(row)
+                    # add selected domain specific features
+                    selected_feature_values = list(hist_train[top_features].mean())
+                    writer.writerow(row + selected_feature_values)
 
                     runtime = (round(time() * 1000) - start_time) / 1000
                     num_runtimes += 1
@@ -197,11 +205,11 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col):
                     eta = get_time_string((iterations - iteration) * avg_runtime)
                     progress_row = '%d/%d\tseed=%d/%d \tinner_seed=%d/%d \tuser=%d/%d \ttime=%s \tETA=%s' % (
                         iteration, iterations, seed_idx + 1, len(seeds), inner_seed_idx + 1, len(inner_seeds),
-                        user_count, len(hists_by_user), runtime_string, eta)
+                        user_count, num_users_to_test, runtime_string, eta)
                     print(progress_row)
 
     # average over inner folds
-    df = pd.read_csv('%s/distances.csv' % log_dir).drop(columns='inner_seed')
+    df = pd.read_csv('%s/%s.csv' % (log_dir, file_name)).drop(columns='inner_seed')
     users = pd.unique(df['user'])
     groups_by_user = df.groupby('user')
     df_mean = None
@@ -213,7 +221,7 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col):
         else:
             df_mean = df_mean.append(df_mean_by_seed)
     df_mean.insert(loc=1, column='seed', value=df_mean.index)
-    df_mean.to_csv('%s/distances_by_seed.csv' % log_dir, index=False)
+    df_mean.to_csv('%s/%s_by_seed.csv' % (log_dir, file_name), index=False)
 
 
 def plot_confusion_matrix(predicted, true, title, path):
