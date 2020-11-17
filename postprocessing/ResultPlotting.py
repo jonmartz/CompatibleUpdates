@@ -46,7 +46,8 @@ def get_model_dict(cmap_name):
         'no hist': {'sample_weight': [1, 1, 0, 0], 'color': 'black', 'std': True},
         # 'sim_ann': {'sample_weight': [0.0, 0.6352, 0.3119, 0.0780], 'color': 'purple'},
         # 'hybrid': {'sample_weight': ['', '', '', ''], 'color': 'green', 'std': False},
-        'best_u': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': True},
+        'best_valid': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': True},
+        'best_test': {'sample_weight': ['', '', '', ''], 'color': 'gold', 'std': True},
         'simple best_u': {'sample_weight': ['', '', '', ''], 'color': 'blue', 'std': True},
         # SYNTHETIC:
         # 'model1': {'sample_weight': ['', '', '', ''], 'color': 'red', 'std': True},
@@ -181,20 +182,32 @@ def get_df_by_weight_norm(df,
 
 def plot_results(log_dir, dataset, user_type, models, log_set, compare_by_percentage, bin_size=1, user_name='',
                  show_tradeoff_plots=False, smooth_color_progression=False, std_opacity=0.15,
-                 performance_metric='accuracy', make_table=False, prefix='', show_grid=False):
+                 performance_metric='AUC', make_table=False, prefix='', show_grid=False, diss_labels=False,
+                 plot_markers=True, weight_by_len=True):
     if user_name == '':
         df_results = pd.read_csv('%s/%s_log.csv' % (log_dir, log_set))
     else:
         df_results = pd.read_csv('%s/logs/%s_%s.csv' % (log_dir, log_set, user_name))
+
+    # if skip_users:
+    #     df_results = df_results.loc[~df_results['user'].isin(skip_users)]
 
     model_names = [i[:-2] for i in df_results.columns if ' x' in i and i[:-2] in models.keys()]
     xs, ys, xs_plot, ys_plot = [], [], [], []
     stds = {}
     autcs_average = []
     # autcs_by_seed = get_autcs_by_seed(df_results, model_names)
-    h1_avg_acc = np.average(df_results['h1_acc'], weights=df_results['len'])
+    if weight_by_len:
+        h1_avg_acc = np.average(df_results['h1_acc'], weights=df_results['len'])
+    else:
+        h1_avg_acc = np.average(df_results['h1_acc'])
+
     weights = pd.unique(df_results['weight'])
     groups_by_weight = df_results.groupby('weight')
+
+    marker = None
+    if plot_markers:
+        marker = 's'
 
     if make_table:
         fig, (ax, tabax) = plt.subplots(nrows=2, figsize=(6.4, 4.8 + 0.3 * len(model_names)))
@@ -203,8 +216,12 @@ def plot_results(log_dir, dataset, user_type, models, log_set, compare_by_percen
     df_by_weight = [groups_by_weight.get_group(i) for i in weights]
     df_by_weight_norm = None
     for model_name in model_names:
-        x = [np.average(i['%s x' % model_name], weights=i['len']) for i in df_by_weight]
-        y = [np.average(i['%s y' % model_name], weights=i['len']) for i in df_by_weight]
+        if weight_by_len:
+            x = [np.average(i['%s x' % model_name], weights=i['len']) for i in df_by_weight]
+            y = [np.average(i['%s y' % model_name], weights=i['len']) for i in df_by_weight]
+        else:
+            x = [np.average(i['%s x' % model_name]) for i in df_by_weight]
+            y = [np.average(i['%s y' % model_name]) for i in df_by_weight]
 
         plot_std = models[model_name]['std']
         if plot_std:
@@ -245,10 +262,10 @@ def plot_results(log_dir, dataset, user_type, models, log_set, compare_by_percen
     max_x = xs[0][-1]
     h1_x = [min_x, max_x]
     h1_y = [h1_avg_acc, h1_avg_acc]
-    if make_table:
-        ax.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
-    else:
-        plt.plot(h1_x, h1_y, 'k--', marker='.', label='pre-update model')
+    # if make_table:
+    #     ax.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+    # else:
+    #     plt.plot(h1_x, h1_y, 'k--', marker='.', label='pre-update model')
 
     autc_improvs = []
     for i in range(len(model_names)):
@@ -268,6 +285,11 @@ def plot_results(log_dir, dataset, user_type, models, log_set, compare_by_percen
     cell_text = []
     model_names_sorted = []
     colors = []
+
+    if bin_size > 1:  # bin points
+        last_idx = len(weights) - ((len(weights) - 2) % bin_size) - 1
+        weights_binned = np.mean(np.array(weights[1:last_idx]).reshape(-1, bin_size), axis=1)
+        weights = [weights[0]] + list(weights_binned) + [np.mean(weights[last_idx:-1]), weights[-1]]
 
     color_idx = 1
     for i in sorted_idxs:
@@ -293,7 +315,8 @@ def plot_results(log_dir, dataset, user_type, models, log_set, compare_by_percen
         if model_name == 'sim_ann':
             sample_weight = ['%.3f' % i for i in sample_weight]
         cell_text += [sample_weight + ['%s%.1f%%' % (sign, autc_improv)]]
-        if model_name == 'best_u':
+        # if model_name == 'best_u':
+        if model_name == 'bla bla':
             x_best, y_best, best_color, sign_best, autc_improv_best = x_plot, y_plot, color, sign, autc_improv
         else:
             # ax.plot(x_plot, y_plot, label=model_name, color=color, marker='.')
@@ -305,9 +328,13 @@ def plot_results(log_dir, dataset, user_type, models, log_set, compare_by_percen
                 ax.plot(x_plot, y_plot, label=label, color=color)
             else:
                 if model_name == 'no hist':
-                    plt.plot(x_plot, y_plot, label='baseline', color=color)
+                    plt.plot(x_plot, y_plot, label='baseline', color=color, marker=marker)
                 else:
-                    plt.plot(x_plot, y_plot, label=label, color=color)
+                    plt.plot(x_plot, y_plot, label=label, color=color, marker=marker)
+                if diss_labels:
+                    for i in range(len(x_plot)):
+                        x_i, y_i = x_plot[i], y_plot[i]
+                        plt.text(x_i, y_i + 0.005, '%.2f' % weights[i], color=color, ha='center')
             if model['std']:
                 y = np.array(y_plot)
                 s = np.array(stds[model_name])
@@ -318,22 +345,27 @@ def plot_results(log_dir, dataset, user_type, models, log_set, compare_by_percen
         if model_name == 'no hist':
             color = 'white'
         colors.append(color)
-    if 'best_u' in model_names:
-        if compare_by_percentage:
-            label_best = 'best_u (%s%.1f%%)' % (sign_best, autc_improv_best)
-        else:
-            label_best = 'best_u (%.5f)' % autc_improv_best
-        if make_table:
-            ax.plot(x_best, y_best, label=label_best, color=best_color)
-        else:
-            plt.plot(x_best, y_best, label=label_best, color=best_color)
-        if models['best_u']['std']:
-            y = np.array(y_best)
-            s = np.array(stds['best_u'])
-            if make_table:
-                ax.fill_between(x_best, y + s, y - s, facecolor=best_color, alpha=std_opacity)
-            else:
-                plt.fill_between(x_best, y + s, y - s, facecolor=best_color, alpha=std_opacity)
+    # if 'best_u' in model_names:
+    #     if compare_by_percentage:
+    #         label_best = 'best_u (%s%.1f%%)' % (sign_best, autc_improv_best)
+    #     else:
+    #         label_best = 'best_u (%.5f)' % autc_improv_best
+    #     if make_table:
+    #         ax.plot(x_best, y_best, label=label_best, color=best_color, marker=marker)
+    #     else:
+    #         plt.plot(x_best, y_best, label=label_best, color=best_color, marker=marker)
+    #     if models['best_u']['std']:
+    #         y = np.array(y_best)
+    #         s = np.array(stds['best_u'])
+    #         if make_table:
+    #             ax.fill_between(x_best, y + s, y - s, facecolor=best_color, alpha=std_opacity)
+    #         else:
+    #             plt.fill_between(x_best, y + s, y - s, facecolor=best_color, alpha=std_opacity)
+
+    if make_table:
+        ax.plot(h1_x, h1_y, 'k--', marker='.', label='h1')
+    else:
+        plt.plot(h1_x, h1_y, 'k--', marker='.', label='pre-update model')
 
     if make_table:
         columns = ('gen', 'gen diss', 'hist', 'hist diss', '+ AUTC %')
@@ -572,17 +604,15 @@ def summarize(log_dir, log_set, metrics, user_name=''):
     return results + [model_names]
 
 
-def add_best_model(log_dir, valid_set, test_set):
-    df_best = pd.read_csv('%s/best_models_%s.csv' % (log_dir, valid_set))
-    df_test = pd.read_csv('%s/%s_log.csv' % (log_dir, test_set))
-    groups_by_user = df_test.groupby('user')
+def add_best_model(log_dir, from_set, to_set):
+    df_best = pd.read_csv('%s/best_models_%s.csv' % (log_dir, from_set))
+    df_to = pd.read_csv('%s/%s_log.csv' % (log_dir, to_set))
+    groups_by_user = df_to.groupby('user')
     user_names = pd.unique(df_best['user'])
     seeds = pd.unique(df_best['seed'])
-    # best_models = df_best.to_numpy()
     best_models = {user: [list(row) for i, row in data.iterrows()] for user, data in df_best.groupby('user')}
     new_model_x = []
     new_model_y = []
-    # i = 0
     for user_idx, user_name in enumerate(user_names):
         print('\tuser %d/%d' % (user_idx + 1, len(user_names)))
         df_user = groups_by_user.get_group(user_name)
@@ -592,18 +622,18 @@ def add_best_model(log_dir, valid_set, test_set):
             best_user, best_seed, best_model = best_models[user_name][seed_idx]
             new_model_x.extend(df_seed['%s x' % best_model].tolist())
             new_model_y.extend(df_seed['%s y' % best_model].tolist())
-            # print('(%s=%s) (%d=%d)' % (user_name, best_user, seed, best_seed))
             if user_name != best_user or seed != best_seed:
                 raise ValueError('results and best lists not in same order of user -> seed')
-            # i += 1
 
-    df_test['best_u x'] = new_model_x
-    df_test['best_u y'] = new_model_y
-    df_test.to_csv('%s/%s_with_best_log.csv' % (log_dir, test_set), index=False)
+    from_set_name = from_set.split('_')[0]
+    df_to['best_%s x' % from_set_name] = new_model_x
+    df_to['best_%s y' % from_set_name] = new_model_y
+    df_to.to_csv('%s/%s_with_best_log.csv' % (log_dir, to_set), index=False)
 
 
 def binarize_results_by_compat_values(log_dir, log_set, num_bins=100, print_progress=True):
     bins = np.array([i / num_bins for i in range(num_bins + 1)])
+    # bins = np.linspace(0, 1, num_bins)
     df_results = pd.read_csv('%s/%s_log.csv' % (log_dir, log_set))
     dict_binarized = {i: [] for i in df_results.columns}
     user_names = pd.unique(df_results['user'])
@@ -617,7 +647,7 @@ def binarize_results_by_compat_values(log_dir, log_set, num_bins=100, print_prog
         if print_progress:
             print('%d/%d user=%s' % (user_idx + 1, len(user_names), user_name))
         df_user = groups_by_user.get_group(user_name)
-        user_len = df_user['len'].iloc[0]
+        user_len = df_user['len'].max()
         user_name_repeated = [user_name] * (num_bins + 1)
         user_len_repeated = [user_len] * (num_bins + 1)
         if seeds is None:
@@ -737,6 +767,8 @@ def get_autcs_averaged_over_inner_seeds(log_dir, log_set):
         writer = csv.writer(file)
         writer.writerow(['user', 'len', 'seed', 'h1'] + [i for i in model_names])
         for user_idx, user in enumerate(users):
+            if user in skip_users:
+                continue
             print('\tuser %d/%d' % (user_idx + 1, len(users)))
             df_user = user_groups.get_group(user)
             hist_len = df_user.iloc[0]['len']
@@ -860,7 +892,7 @@ def make_one_hot(labels, models):
     return np.array(rows)
 
 
-def write_meta_learning_summary(log_dir, min_p_val = 0.05):
+def write_meta_learning_summary(log_dir, min_p_val=0.05):
     versions = [
         # 'meta_results_ver_1',
         'meta_results_ver_2',
@@ -1056,6 +1088,10 @@ def execute_phase(phase, log_set):
         log_set = 'train_bins'
         individual_users = True
         get_best = True
+    elif phase == 'get best_u for each user using binarized test results':
+        log_set = 'test_bins'
+        individual_users = True
+        get_best = True
     elif phase == 'binarize test results':
         log_set = 'test'
         binarize_by_compat = True
@@ -1066,17 +1102,29 @@ def execute_phase(phase, log_set):
         log_set = 'train_bins'
         test_set = 'valid_bins'
         add_best = True
+    elif phase == 'add best_u computed from test to binarized test with best results':
+        log_set = 'test_bins'
+        test_set = 'test_bins_with_best'
+        add_best = True
     elif phase == 'generate averaged plots for binarized test results with best':
         log_set = 'test_bins_with_best'
+    elif phase == 'generate averaged plots for binarized test results with both best':
+        log_set = 'test_bins_with_best_with_best'
     elif phase == 'generate individual user plots for test bins with best results':
-        log_set = 'test_bins_with_best'
+        log_set = 'test_bins_with_best_with_best'
         individual_users = True
     elif phase == 'create test summary':
         log_set = 'test_bins_with_best'
         make_summary = True
         individual_users = True
+    elif phase == 'generate user plots for binarized train results':
+        log_set = 'train_bins'
+        individual_users = True
     elif phase == 'generate user plots for binarized validation results':
         log_set = 'valid_bins'
+        individual_users = True
+    elif phase == 'generate user plots for binarized test results':
+        log_set = 'test_bins'
         individual_users = True
     elif phase == 'generate averaged plots for binarized validation results':
         log_set = 'valid_bins'
@@ -1097,7 +1145,7 @@ def execute_phase(phase, log_set):
         log_set = 'test_bins'
         get_autcs = True
     elif phase == 'get autcs averaged over inner seeds for test bins with best':
-        log_set = 'test_bins_with_best'
+        log_set = 'test_bins_with_best_with_best'
         get_autcs = True
     elif phase == 'generate averaged plots for binarized validation results with best':
         log_set = 'valid_bins_with_best'
@@ -1105,8 +1153,12 @@ def execute_phase(phase, log_set):
         individual_users = True
         get_autoML_best = True
 
-    results_dir = 'C:/Users/Jonathan/Documents/BGU/Research/Thesis/results/%s' % model_type
-    log_dir = '%s/%s/%s/%s/%s' % (results_dir, dataset, version, user_type, performance_metric)
+    if from_current_result:
+        results_dir = 'C:/Users/Jonma/Documents/BGU/Thesis/result'
+        log_dir = '%s/%s/%s' % (results_dir, user_type, performance_metric)
+    else:
+        results_dir = 'C:/Users/Jonma/Documents/BGU/Thesis/results/%s' % model_type
+        log_dir = '%s/%s/%s/%s/%s' % (results_dir, dataset, version, user_type, performance_metric)
     models = get_model_dict('jet')
 
     if phase == 'make meta-learning final summary':
@@ -1120,6 +1172,20 @@ def execute_phase(phase, log_set):
     elif get_autcs:
         get_autcs_averaged_over_inner_seeds(log_dir, log_set)
         # get_all_autcs(log_dir, log_set)
+
+        df = pd.read_csv('%s/%s_autcs.csv' % (log_dir, log_set))
+        models = list(df.columns)[5:]
+        base_mean = df['no hist'].mean()
+        print()
+        for model in models:
+            model_mean = df[model].mean()
+            improvement = (model_mean / base_mean - 1) * 100
+            t_stat, p_val = ttest_rel(df['no hist'], df[model])
+            success_str = ''
+            if improvement > 0 and p_val <= 0.05:
+                success_str = ' SUCCESS!'
+            print('model = %s improvement = %.2f%% p_val = %.5f%s' % (model, improvement, p_val / 2, success_str))
+
     elif not individual_users:  # make sure this is last elif
         if get_best:
             print('got best models for general set, not individual users!')
@@ -1811,9 +1877,9 @@ def execute_phase(phase, log_set):
                     plot_results('%s/users_%s' % (log_dir, log_set), dataset, user_type, models, log_set,
                                  compare_by_percentage, bin_size=bin_size, user_name=user_id)
 
-add_parametrized_models = False
 
-num_normalization_bins = 50
+add_parametrized_models = True
+num_normalization_bins = 10
 
 if __name__ == "__main__":
 
@@ -1824,19 +1890,26 @@ if __name__ == "__main__":
 
     if not use_autoML:
         phases = [
-            # 'binarize validation results',  # phase 1
-            # 'get best_u for each user using binarized validation results',  # phase 2
-            # 'binarize test results',  # phase 3
-            # 'add best_u computed from validation to binarized test results',  # phase 4
+            'binarize validation results',  # phase 1
+            'binarize test results',  # phase 3
+            'get best_u for each user using binarized validation results',  # phase 2
+            'add best_u computed from validation to binarized test results',  # phase 4
+            'get best_u for each user using binarized test results',
+            'add best_u computed from test to binarized test with best results',
+            'generate averaged plots for binarized test results with both best',  # phase 5
+            'get autcs averaged over inner seeds for test bins with best',
+            #
             # 'generate averaged plots for binarized test results with best',  # phase 5
             # 'generate individual user plots for test bins with best results',  # phase 6
             # 'create test summary',  # phase 7
-
-            'generate averaged plots for binarized validation results',
-            # 'generate user plots for binarized validation results',
-            # 'generate averaged plots for binarized test results',
+            #
             # 'binarize train results',
             # 'generate averaged plots for binarized train results',
+            # 'generate averaged plots for binarized validation results',
+            # 'generate averaged plots for binarized test results',
+            # 'generate user plots for binarized train results',
+            # 'generate user plots for binarized validation results',
+            # 'generate user plots for binarized test results',
             # 'get autcs averaged over inner seeds',
         ]
     else:
@@ -1847,7 +1920,7 @@ if __name__ == "__main__":
             # 'get autcs averaged over inner seeds for train bins',
             # 'get autcs averaged over inner seeds for validation bins',
             # 'get autcs averaged over inner seeds for test bins',
-            'get best for each user',
+            # 'get best for each user',
             # 'make meta-learning final summary'
 
             # 'add best_u computed from validation to binarized test results',
@@ -1858,12 +1931,14 @@ if __name__ == "__main__":
             # 'get autcs averaged over inner seeds for test bins with best',
         ]
 
-    # dataset = 'ednet'
+    from_current_result = True
+
     # dataset = 'assistment'
-    # dataset = 'salaries'
-    # dataset = 'recividism'
     dataset = 'citizen_science'
     # dataset = 'mooc'
+    # dataset = 'ednet'
+    # dataset = 'salaries'
+    # dataset = 'recividism'
     # dataset = 'GZ'
     # dataset = 'averaging tradeoffs'
 
@@ -1881,7 +1956,7 @@ if __name__ == "__main__":
     test_only_best_ccp_alpha = True
     add_domain_features = True
     regress_to_score = False
-    compare_by_percentage = False
+    compare_by_percentage = True
     meta_weighted_average = True
     make_geometric_average = False
     remove_h1_area = True
@@ -1890,6 +1965,7 @@ if __name__ == "__main__":
     rebuild_meta_dataset = True  # todo: doesn't work when False...
     meta_learning_per_user = True
     save_meta_agent_tree = False
+
 
     meta_learning_model = 'tree'
     # meta_learning_model = 'NN'
@@ -1905,6 +1981,7 @@ if __name__ == "__main__":
     # summary_metrics = ['avg', 'std', 'paired_ttest']
     summary_metrics = ['avg']
 
+    skip_users = []
     if dataset == 'assistment':
         # meta_cross_validation_splits = 20
         meta_cross_validation_splits = 100
@@ -1922,6 +1999,7 @@ if __name__ == "__main__":
     elif dataset == 'mooc':
         meta_cross_validation_splits = 6
         selected_ccp_alpha = 0.1
+        skip_users = [7752, 7054]
 
     log_set = 'test_bins_with_best'
 

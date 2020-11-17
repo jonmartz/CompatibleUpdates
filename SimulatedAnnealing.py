@@ -653,8 +653,8 @@ for user_col in user_cols:
                 Y_trains_by_inner_seed.append(Y_train)
 
                 # train h1
-                h1 = Models.CompatibleRegressionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, max_depth=max_depth,
-                                                     metric=metric)
+                h1 = Models.CompatibleDecisionTree(X_train[:h1_len], Y_train[:h1_len], 'h1', ccp_alpha, max_depth=max_depth,
+                                                   metric=metric)
                 h1_by_inner_seed.append(h1)
 
                 if no_hists_by_seed is not None:
@@ -816,8 +816,8 @@ for user_col in user_cols:
 
                             # h1
                             h1 = h1_by_inner_seed[inner_seed_idx]
-                            h1_acc_valid = h1.test(hist_valid_x, hist_valid_y)['auc']
-                            h1_acc_test = h1.test(hist_test_x, hist_test_y)['auc']
+                            h1_acc_valid = h1.score(hist_valid_x, hist_valid_y)['auc']
+                            h1_acc_test = h1.score(hist_test_x, hist_test_y)['auc']
                             h1_acc_valid_by_inner_seed.append(h1_acc_valid)
                             h1_acc_test_by_inner_seed.append(h1_acc_test)
 
@@ -862,8 +862,8 @@ for user_col in user_cols:
                                                                in no_hists_by_inner_seed]
                             else:
                                 no_hist_valid_by_inner_seed = [
-                                    Models.CompatibleRegressionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
-                                                                    old_model=h1, diss_weight=0, metric=metric)
+                                    Models.CompatibleDecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
+                                                                  old_model=h1, diss_weight=0, metric=metric)
                                     for X_train, Y_train in zip(X_train_by_inner_seed, Y_train_by_inner_seed)
                                 ]
                             # todo: copied cached no hists
@@ -873,8 +873,8 @@ for user_col in user_cols:
                                 no_hist_valid.set_hybrid_test(hist, hist_valid_x)
 
                             no_hist_test_by_inner_seed = [
-                                Models.CompatibleRegressionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
-                                                                old_model=h1, diss_weight=0, metric=metric)
+                                Models.CompatibleDecisionTree(X_train, Y_train, 'h2', ccp_alpha, max_depth=max_depth,
+                                                              old_model=h1, diss_weight=0, metric=metric)
                                 for X_train, Y_train, h1
                                 in zip(X_train_by_inner_seed, Y_train_by_inner_seed, h1_by_inner_seed)
                             ]
@@ -911,12 +911,12 @@ for user_col in user_cols:
                                     for X_train, Y_train, h1, hist
                                     in zip(X_train_by_inner_seed, Y_train_by_inner_seed,
                                            h1_by_inner_seed, hist_by_inner_seed)]
-                            valid_result_by_inner_seed = [h2.test(hist_valid_x, hist_valid_y, h1)
+                            valid_result_by_inner_seed = [h2.score(hist_valid_x, hist_valid_y, h1)
                                                           for h2, hist_valid_x, hist_valid_y, h1
                                                           in zip(h2_by_inner_seed, hist_valid_x_by_inner_seed,
                                                                  hist_valid_y_by_inner_seed, h1_by_inner_seed)]
                             if not sim_ann:
-                                test_result_by_inner_seed = [h2.test(hist_test_x, hist_test_y, h1)
+                                test_result_by_inner_seed = [h2.score(hist_test_x, hist_test_y, h1)
                                                              for h2, h1 in zip(h2_by_inner_seed, h1_by_inner_seed)]
 
                         for inner_seed_idx in range(len(inner_seeds)):

@@ -31,9 +31,10 @@ def get_cache_and_params(log_dir, user_col):
     params_path = '/'.join(log_dir.split('/')[:-2]) + '/parameters.csv'
     params = pd.read_csv(params_path)
     row = params.iloc[0]
-    cache = '%s skip_%s max_len_%d min_hist_%d max_hist_%d chrono_%s balance_%s' % (
-        user_col, '_'.join(eval(row['skip_cols'])), row['dataset_max_size'], row['min_hist_len'], row['max_hist_len'],
-        row['chrono_split'], row['balance_histories']
+    cache = '%s skip_%s max_len_%d min_hist_%d max_hist_%d balance_%s' % (
+        # user_col, '_'.join(eval(row['skip_cols'])), row['dataset_max_size'], row['min_hist_len'], row['max_hist_len'],
+        user_col, len(eval(row['skip_cols'])), row['dataset_max_size'], row['min_hist_len'], row['max_hist_len'],
+        row['balance_histories']
     )
     return cache, params
 
@@ -42,8 +43,8 @@ def make_data_analysis(log_dir, dataset, user_col, target_col):
     if os.path.exists('%s/wasserstein_distances.csv' % log_dir):
         return
 
-    cache = get_cache_and_params(log_dir, user_col)
-    dataset_dir = 'C:/Users/Jonathan/Documents/BGU/Research/Thesis/DataSets/%s/caches/%s' % (dataset, cache)
+    cache, params = get_cache_and_params(log_dir, user_col)
+    dataset_dir = 'C:/Users/Jonma/Documents/BGU/Thesis/DataSets/%s/caches/%s' % (dataset, cache)
     dataset_path = '%s/0.csv' % dataset_dir
     df = pd.read_csv(dataset_path)
 
@@ -98,11 +99,11 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col, mi
         return
     # get cached dataset
     cache, params = get_cache_and_params(log_dir, user_col)
-    needed_params = params[['max_hist_len', 'seeds', 'inner_seeds', 'train_frac', 'valid_frac', 'ccp_alpha']].iloc[0]
-    max_hist_len, num_seeds, num_inner_seeds, train_frac, valid_frac, ccp_alpha = [float(i) for i in needed_params]
+    needed_params = params[['max_hist_len', 'seeds', 'inner_seeds', 'train_frac', 'valid_frac']].iloc[0]
+    max_hist_len, num_seeds, num_inner_seeds, train_frac, valid_frac = [float(i) for i in needed_params]
     max_hist_len = int(max_hist_len)
     seeds, inner_seeds = list(range(int(num_seeds))), list(range(int(num_inner_seeds)))
-    cache_dir = 'C:/Users/Jonathan/Documents/BGU/Research/Thesis/DataSets/%s/caches/%s' % (dataset, cache)
+    cache_dir = 'C:/Users/Jonma/Documents/BGU/Thesis/DataSets/%s/caches/%s' % (dataset, cache)
 
     print("loading users...")
     all_cols = pd.read_csv('%s/all_columns.csv' % cache_dir).columns
