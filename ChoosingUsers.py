@@ -10,6 +10,7 @@ def choose_users():
     user_lens = df[user_col].value_counts()
     groups_by_user = df.groupby(user_col)
     total_len = 0
+    n_users = 0
     with open('%s/%s.csv' % (dataset_dir, dataset), 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(df.columns)
@@ -17,10 +18,16 @@ def choose_users():
 
         if choose_first_n:
             for user, hist_len in user_lens.items():
+                df_user = groups_by_user.get_group(user)
+                total_len += hist_len
+                # n = len(df_user) * k
+                # if df_user[target_col][-(int(n) if n >= 1 else 1):].nunique() == 1:
+                #     continue
                 print('len = %d' % hist_len)
-                for i, row in groups_by_user.get_group(user).iterrows():
+                for i, row in df_user.iterrows():
                     writer.writerow(row)
                 user_idx += 1
+                n_users += 1
                 if user_idx == num_users:
                     break
         else:
@@ -28,22 +35,29 @@ def choose_users():
                 chosen_lens = np.array([i / (num_users - 1) for i in reversed(range(num_users))])
                 chosen_lens = (chosen_lens * (max_user_len - min_user_len) + min_user_len).tolist()
             for user, hist_len in user_lens.items():
-                if num_users > 0:
-                    if hist_len <= chosen_lens[user_idx]:
+                if min_user_len <= hist_len <= max_user_len:
+                    if num_users > 0:
+                        if hist_len <= chosen_lens[user_idx]:
+                            df_user = groups_by_user.get_group(user)
+                            # n = len(df_user) * k
+                            # if df_user[target_col][-(int(n) if n >= 1 else 1):].nunique() == 1:
+                            #     continue
+                            print('len = %d' % hist_len)
+                            total_len += hist_len
+                            n_users += 1
+                            for i, row in df_user.iterrows():
+                                writer.writerow(row)
+                            if num_users > 0:
+                                user_idx += 1
+                                if user_idx == len(chosen_lens):
+                                    break
+                    else:
                         print('len = %d' % hist_len)
                         total_len += hist_len
+                        n_users += 1
                         for i, row in groups_by_user.get_group(user).iterrows():
                             writer.writerow(row)
-                        if num_users > 0:
-                            user_idx += 1
-                            if user_idx == len(chosen_lens):
-                                break
-                elif min_user_len <= hist_len <= max_user_len:
-                    print('len = %d' % hist_len)
-                    total_len += hist_len
-                    for i, row in groups_by_user.get_group(user).iterrows():
-                        writer.writerow(row)
-    print('\ntotal len = %d' % total_len)
+    print(f'\nusers = {n_users}, total len = {total_len}')
 
 
 def choose_timestamps():
@@ -144,15 +158,12 @@ def choose_timestamps():
             df[filter_array].to_csv('%s/%s.csv' % (dataset_dir, dataset), index=False)
 
 
+dataset, user_col, target_col, min_user_len, max_user_len = 'assistment', 'user_id', 'correct', 100, 2000
+# dataset, user_col, target_col, min_user_len, max_user_len = 'citizen_science', 'user_id', 'd_label', 100, 2000
+# dataset, user_col, target_col, min_user_len, max_user_len = 'mooc', 'forum_uid', 'confusion', 10, 500
 
-# dataset = 'assistment'
-dataset = 'citizen_science'
-
-user_col = 'user_id'
-timestamp_split = True
-
-max_user_len = 1000
-min_user_len = 50
+timestamp_split = False
+# k = 0.1  # last_pct_of_monolabel_hist_to_skip_user
 
 if timestamp_split:
     df_max_size = 0
@@ -166,7 +177,7 @@ if timestamp_split:
     save_users = True
     choose_timestamps()
 else:
-    num_users = 50  # -1 to get all users depending on criterion
+    num_users = 1000  # -1 to get all users depending on criterion
     choose_first_n = False
     choose_users()
 

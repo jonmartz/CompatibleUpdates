@@ -12,6 +12,7 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sn
 from ModelTesting import get_time_string
 import itertools
+import random
 
 
 def min_and_max(x):
@@ -94,9 +95,28 @@ def make_data_analysis(log_dir, dataset, user_col, target_col):
 
 
 def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col, min_hist_len_to_test,
-                                      file_name='user_features', num_top_features=5):
-    if os.path.exists('%s/%s.csv' % (log_dir, file_name)):
+                                      file_name='user_features', num_top_features=5, chrono_split=True):
+    if os.path.exists('%s/%s_by_seed.csv' % (log_dir, file_name)):
         return
+    mode = 'w'
+    done_rows = {}
+    if os.path.exists('%s/%s.csv' % (log_dir, file_name)):
+        mode = 'a'
+        existing_df = pd.read_csv('%s/%s.csv' % (log_dir, file_name))
+        for i, row in existing_df.iterrows():
+            user, seed, inner_seed = row['user'], row['seed'], row['inner_seed']
+            if seed not in done_rows:
+                seed_dict = {}
+                done_rows[seed] = seed_dict
+            else:
+                seed_dict = done_rows[seed]
+            if inner_seed not in seed_dict:
+                inner_seed_set = set()
+                seed_dict[inner_seed] = inner_seed_set
+            else:
+                inner_seed_set = seed_dict[inner_seed]
+            inner_seed_set.add(user)
+
     # get cached dataset
     cache, params = get_cache_and_params(log_dir, user_col)
     needed_params = params[['max_hist_len', 'seeds', 'inner_seeds', 'train_frac', 'valid_frac']].iloc[0]
@@ -144,32 +164,70 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col, mi
     iteration = 0
     avg_runtime = 0
     num_runtimes = 0
-    with open('%s/%s.csv' % (log_dir, file_name), 'w', newline='') as file:
+    with open('%s/%s.csv' % (log_dir, file_name), mode=mode, newline='') as file:
         writer = csv.writer(file)
-        row = ['user', 'len', 'seed', 'inner_seed']
-        for i, j in itertools.combinations(['all_train', 'hist_train', 'hist_valid', 'hist_test'], 2):
-            row.append('%s to %s' % (i, j))
 
-        writer.writerow(row + top_features)
+        if mode == 'w':
+            row = ['user', 'len', 'seed', 'inner_seed']
+            for i, j in itertools.combinations(['all_train', 'hist_train', 'hist_valid', 'hist_test'], 2):
+                row.append('%s to %s' % (i, j))
+            writer.writerow(row + top_features)
 
         for seed_idx, seed in enumerate(seeds):
+
+            if seed in done_rows and len(done_rows[seed]) == len(inner_seeds):
+                seed_dict = done_rows[seed]
+                if all([len(seed_dict[i]) == len(hists_by_user) for i in inner_seeds]):
+                    iteration += len(inner_seeds) * len(hists_by_user)
+                    continue
+
             # split the test sets
             hists_seed_by_user = {}
-            for user_id, hist in hists_by_user.items():
-                hist_train_and_valid = hist.sample(n=int(len(hist) * (train_frac + valid_frac)), random_state=seed)
-                hist_test = hist.drop(hist_train_and_valid.index).reset_index(drop=True)
+            for user_idx, item in enumerate(hists_by_user.items()):
+                user_id, hist = item
+                if chrono_split:
+                    valid_len = int(len(hist) * valid_frac)
+                    test_len = int(len(hist) * (1 - (train_frac + valid_frac)))
+                    min_idx = 3 * valid_len  # |train set| >= 2|valid set|
+                    delta = len(hist) - test_len - min_idx  # space between min_idx and test_start_idx
+                    delta_frac = list(np.linspace(1, 0, len(seeds)))
+                    random.seed(user_idx)
+                    random.shuffle(delta_frac)
+                    test_start_idx = min_idx + int(delta * delta_frac[seed])
+                    hist_train_and_valid = hist.iloc[0: test_start_idx]
+                    hist_test = hist.iloc[test_start_idx: test_start_idx + test_len + 1]
+                else:
+                    hist_train_and_valid = hist.sample(n=int(len(hist) * (train_frac + valid_frac)), random_state=seed)
+                    hist_test = hist.drop(hist_train_and_valid.index).reset_index(drop=True)
                 hists_seed_by_user[user_id] = [hist_train_and_valid, hist_test.drop(columns=target_col)]
 
             # run analysis for each inner seed
             for inner_seed_idx, inner_seed in enumerate(inner_seeds):
+
+                if seed in done_rows and inner_seed in done_rows[seed]:
+                    if len(done_rows[seed][inner_seed]) == len(hists_by_user):
+                        iteration += len(hists_by_user)
+                        continue
+
                 hists_inner_seed_by_user = {}
                 h2_train = pd.DataFrame(columns=all_cols, dtype=np.float32)
 
                 for user_id, item in hists_seed_by_user.items():
                     hist_train_and_valid, hist_test = item
                     hist_train_len = hist_train_lens[user_id]
-                    hist_train = hist_train_and_valid.sample(n=hist_train_len, random_state=inner_seed)
-                    hist_valid = hist_train_and_valid.drop(hist_train.index)
+                    if chrono_split:
+                        hist_len = len(hists_by_user[user_id])  # todo: maybe this is wrong
+                        valid_len = int(hist_len * valid_frac)
+                        delta = len(hist_train_and_valid) - 2 * valid_len  # space between min_idx and valid_start
+                        delta_frac = list(np.linspace(1, 0, len(inner_seeds)))
+                        random.seed(user_idx)
+                        random.shuffle(delta_frac)
+                        valid_start_idx = valid_len + int(delta * delta_frac[inner_seed])
+                        hist_train = hist_train_and_valid.iloc[0: valid_start_idx]
+                        hist_valid = hist_train_and_valid.iloc[valid_start_idx:]
+                    else:
+                        hist_train = hist_train_and_valid.sample(n=hist_train_len, random_state=inner_seed)
+                        hist_valid = hist_train_and_valid.drop(hist_train.index)
                     h2_train = h2_train.append(hist_train, ignore_index=True, sort=False)
                     hists_inner_seed_by_user[user_id] = [hist_train.drop(columns=target_col),
                                                          hist_valid.drop(columns=target_col), hist_test]
@@ -181,14 +239,19 @@ def make_data_analysis_per_inner_seed(log_dir, dataset, user_col, target_col, mi
 
                 user_count = 0
                 for user_id, item in hists_inner_seed_by_user.items():
+
                     hist_train, hist_valid, hist_test = item
                     hist_len = len(hist_train) + len(hist_valid) + len(hist_test)
-                    if hist_len < min_hist_len_to_test:
-                        break
+                    # if hist_len < min_hist_len_to_test:
+                    #     break
 
-                    start_time = int(round(time() * 1000))
                     iteration += 1
                     user_count += 1
+
+                    if seed in done_rows and inner_seed in done_rows[seed] and user_id in done_rows[seed][inner_seed]:
+                        continue
+
+                    start_time = int(round(time() * 1000))
 
                     row = [user_id, hist_len, seed, inner_seed]
                     # add wasserstein distances

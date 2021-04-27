@@ -7,17 +7,31 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         # data settings
         target_col = 'correct'
         original_categ_cols = ['skill', 'tutor_mode', 'answer_type', 'type', 'original']
-        user_cols = ['user_id']
-        skip_cols = ['skill']
+        user_cols = [
+            # 'user_id',
+            # 'student_class_id',
+            'teacher_id',
+            # 'school_id',
+        ]
+        skip_cols = [
+            'skill',
+            'user_id',
+            'student_class_id',
+            'teacher_id',
+            'school_id',
+        ]
+        skip_cols.remove(user_cols[0])
+
+        # skip_cols = []
         df_max_size = 0
-        hists_already_determined = False
+        hists_already_determined = True
         # experiment settings
         train_frac = 0.6
         valid_frac = 0.3
         h1_frac = 0.01  # if > 1 then is considered as num. of samples, not fraction
         h2_len = 10000000
-        seeds = range(10)
-        inner_seeds = range(5)
+        seeds = range(1)
+        inner_seeds = range(10)
         weights_num = 5
         weights_range = [0, 1]
         # user settings
@@ -27,13 +41,38 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         metrics = ['auc']
         # model settings
 
-        model_params = {'name': 'tree',
+        model_params = {
+            'name': 'tree',
+            'forced_params_per_model': {},
+            'params': {'ccp_alpha': [0.0001, 0.0005, 0.001, 0.005, 0.008, 0.01]},
+            # 'params': {'ccp_alpha': [0.00001, 0.0001, 0.001, 0.01]},
+            # 'params': {'ccp_alpha': [0.0001, 0.001]},
+            # 'params': {'ccp_alpha': 0.004},
+        }
 
-                        'forced_params_per_model': {},
+        # model_params = {
+        #     'name': 'NN',
+        #     'forced_params_per_model': {},
+        #     'params': {
+        #         'output_dim': 1,
+        #         'layer_dims': [],
+        #         'multilabel': True,
+        #         '_fit_epochs': 100,
+        #         '_fit_verbose': 0,
+        #         # '_fit_min_delta': 0,
+        #         # '_fit_patience': 100,
+        #         # '_fit_monitor': 'val_loss',
+        #     }
+        # }
 
-                        'params': {'ccp_alpha': [0.00001, 0.0001, 0.001, 0.01, 0.1]}}
-                        # 'params': {'ccp_alpha': 0.004}}
-                        # 'params': {'ccp_alpha': 0.001}}
+        # model_params = {
+        #     'name': 'lr',
+        #     'forced_params_per_model': {},
+        #     'params': {
+        #         'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000],
+        #         # 'solver': ['liblinear', 'lbfgs'],
+        #     }
+        # }
 
         # model_params = {'name': 'adaboost',
         #
@@ -44,9 +83,14 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         # # 'params': {'_base_max_depth': 1, 'n_estimators': 50}}
 
         # FOR RESULT ANALYSIS
-        version = 'meta-learning'
-        user_type = 'user_id'
-        experiment_type = 'large experiments'
+        experiment_type = 'fit on train and valid'
+
+        # version = '1000 users'
+        # version = 'abs AUTC tree'
+        # version = 'by school'
+        version = 'by teacher'
+
+        user_type = user_cols[0]
         performance_metric = 'auc'
         bin_size = 1
 
@@ -61,32 +105,34 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         df_max_size = 0
         hists_already_determined = True
         # experiment settings
-        train_frac = 0.8
-        valid_frac = 0.1
+        train_frac = 0.6
+        valid_frac = 0.3
         h1_frac = 0.01  # if > 1 then is considered as num. of samples, not fraction
         h2_len = 10000000
         seeds = range(1)
         inner_seeds = range(1)
-        weights_num = 1
+        weights_num = 2
         weights_range = [0, 1]
         # user settings
         min_hist_len = 10
         max_hist_len = 10000000
         min_hist_len_to_test = 0
         metrics = ['auc']
+
         # model settings
-        # model_params = {'name': 'tree',
-        #                 'params': {'ccp_alpha': [0, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0]}}
-        # 'params': {'ccp_alpha': 0.004}}
-        # model_type = 'xgb'
-        model_params = {'name': 'adaboost',
-                        'params': {'_base_max_depth': [1, 2, 3, 4, 5], 'n_estimators': [5, 10, 20, 50, 100]}}
-        # 'params': {'_base_max_depth': 1, 'n_estimators': 50}}
+
+        model_params = {
+            'name': 'tree',
+            'forced_params_per_model': {},
+
+            'params': {'ccp_alpha': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05]},
+            # 'params': {'ccp_alpha': 0.001}
+        }
 
         # FOR RESULT ANALYSIS
-        version = 'meta-learning'
+        experiment_type = 'fit on train and valid'
+        version = '100 users'
         user_type = 'user'
-        experiment_type = 'large experiments'
         performance_metric = 'auc'
         bin_size = 1
 
@@ -110,23 +156,37 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         h1_frac = 0.01  # if > 1 then is considered as num. of samples, not fraction
         h2_len = 10000000
         seeds = range(1)
-        inner_seeds = range(5)
-        weights_num = 5
+        inner_seeds = range(1)
+        weights_num = 10
         weights_range = [0, 1]
         # user settings
-        min_hist_len = 50
+        min_hist_len = 1
         max_hist_len = 10000000
         min_hist_len_to_test = 0
         metrics = ['auc']
         # model settings
 
-        model_params = {'name': 'tree',
+        model_params = {
+            'name': 'tree',
+            # 'params': {'ccp_alpha': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]}
+            # 'params': {'ccp_alpha': [0.0001, 0.001, 0.01, 0.1, 1.0]}
+            # 'params': {'ccp_alpha': [0.0001, 0.001]}
+            'params': {'ccp_alpha': 0.001}
+        }
 
-                        'forced_params_per_model': {},
-
-                        'params': {'ccp_alpha': [0, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0]}
-                        # 'params': {'ccp_alpha': 0.001}
-                        }
+        # model_params = {
+        #     'name': 'NN',
+        #     'params': {
+        #         'output_dim': 1,
+        #         'layer_dims': [],
+        #         'multilabel': True,
+        #         '_fit_epochs': 100,
+        #         '_fit_verbose': 0,
+        #         # '_fit_min_delta': 0,
+        #         # '_fit_patience': 50,
+        #         # '_fit_monitor': 'val_loss',
+        #     }
+        # }
 
         # model_params = {'name': 'adaboost',
         #
@@ -139,9 +199,13 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         #                 }
 
         # FOR RESULT ANALYSIS
-        version = 'accuracy'
+        experiment_type = 'fit on train and valid'
+
+        version = '1000 users'
+        # version = 'abs AUTC tree'
+        # version = 'abs AUTC NN'
+
         user_type = 'user_id'
-        experiment_type = 'large experiments'
         performance_metric = 'auc'
         bin_size = 1
 
@@ -156,42 +220,69 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         skip_cols = []
         # skip_cols = ['up_count', 'reads']
         df_max_size = 0
-        hists_already_determined = False
+        hists_already_determined = True
         # experiment settings
         train_frac = 0.6
-        valid_frac = 0.3
+        valid_frac = 0.2
         h1_frac = 0.01  # if > 1 then is considered as num. of samples, not fraction
         h2_len = 10000000
-        seeds = range(10)
-        inner_seeds = range(5)
-        weights_num = 5
+        seeds = range(1)
+        inner_seeds = range(1)
+        weights_num = 2
         weights_range = [0, 1]
         # user settings
-        min_hist_len = 20
+        min_hist_len = 1
         max_hist_len = 10000000
         min_hist_len_to_test = 0
         metrics = ['auc']
 
         # model settings
 
-        model_params = {'name': 'tree',
+        model_params = {
+            'name': 'tree',
+            'params': {'ccp_alpha': [0.0001, 0.0005, 0.001, 0.005, 0.01]}
+            # 'params': {'ccp_alpha': [0.001, 0.01]}
+            # 'params': {'ccp_alpha': 0.005}
+            # 'params': {'max_depth': 5}
+        }
 
-                        'forced_params_per_model': {},
+        # model_params = {
+        #     'name': 'NN',
+        #     'params': {
+        #         'output_dim': 1,
+        #         'layer_dims': [256],
+        #         'multilabel': True,
+        #         '_fit_epochs': 20,
+        #         '_fit_verbose': 0,
+        #         # '_fit_patience': 10,
+        #         # '_fit_min_delta': 0,
+        #         # '_fit_monitor': 'val_loss',
+        #     }
+        # }
 
-                        'params': {'ccp_alpha': [0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0]}}
-        # 'params': {'ccp_alpha': 0.01}}
+        # model_params = {
+        #     'name': 'adaboost',
+        #     # 'params': {'_base_max_depth': [1, 2, 3, 4, 5], 'n_estimators': [5, 10, 20]}
+        #     'params': {'_base_max_depth': 1, 'n_estimators': 50}
+        # }
 
-        # model_params = {'name': 'adaboost',
-        #
-        #                 'forced_params_per_model': {},
-        #
-        #                 'params': {'_base_max_depth': [1, 2, 3, 4, 5], 'n_estimators': [5, 10, 20, 50, 100]}}
-        #                 # 'params': {'_base_max_depth': 1, 'n_estimators': 50}}
+        # model_params = {
+        #     'name': 'dummy',
+        #     'params': {'strategy': 'stratified'}
+        # }
 
         # FOR RESULT ANALYSIS
-        version = 'accuracy'
+        experiment_type = 'fit on train and valid'
+
+        # version = '30 users NNs'
+        # version = '250 users'
+        # version = 'NN [256]'
+        version = '250 users NN [256] 50 eps'
+
+        # version = 'abs AUTC tree'
+        # version = 'abs AUTC NN'
+
         user_type = 'forum_uid'
-        experiment_type = 'large experiments'
         performance_metric = 'auc'
         bin_size = 1
 
@@ -306,6 +397,8 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
             bin_size = 10
 
     if not result_analysis:
+        if 'forced_params_per_model' not in model_params:
+            model_params['forced_params_per_model'] = {}
         return [target_col, original_categ_cols, user_cols, skip_cols, hists_already_determined, df_max_size,
                 train_frac, valid_frac, h1_frac, h2_len, seeds, inner_seeds, weights_num, weights_range, model_params,
                 min_hist_len, max_hist_len, metrics, min_hist_len_to_test]

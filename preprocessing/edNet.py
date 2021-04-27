@@ -312,36 +312,70 @@ def write_bundle_content(dataset_dir):
             writer.writerow([bundle_id[1:], ';'.join([str(i) for i in sorted(tags)])])
 
 
-dataset_dir = 'C:/Users/Jonathan/Documents/BGU/Research/Thesis/DataSets/ednet'
+def get_users(num_users, min_size, max_size):
+    min_size *= 1024  # to bytes
+    max_size *= 1024  # to bytes
+    chosen_sizes = np.array([i / (num_users - 1) for i in reversed(range(num_users))])
+    chosen_sizes = (chosen_sizes * (max_size - min_size) + min_size).tolist()
+    df_users = pd.read_csv(f'{dataset_dir}/users.csv')
+    chosen_users = []
+    for i, row in df_users.iterrows():
+        user, size = row
+        # user, size = row['user'], row['size']
+        if size <= chosen_sizes[len(chosen_users)]:
+            print(f'size: {int(size / 1024)}')
+            chosen_users.append(user)
+        if len(chosen_users) == len(chosen_sizes):
+            break
+    return chosen_users
+
+
+def gather_user_meta_data():
+    rows = []
+    for subdir, dirs, files in os.walk(users_dir):
+        for file_name in files:
+            file_path = os.path.join(users_dir, file_name)
+            file_size = os.stat(file_path).st_size
+            # with open(file_path, 'r', newline='') as file_out:
+            #     reader = csv.reader(file_out)
+            #     hist_len = sum(1 for _ in reader) - 1
+            # rows.append([file_name[1:-4], hist_len, file_size])
+            rows.append([file_name[1:-4], file_size])
+            break
+    pd.DataFrame(rows, columns=['user', 'size']).sort_values('size', ascending=False).to_csv(
+        f'{dataset_dir}/users.csv', index=False)
+
+
+dataset_dir = 'C:/Users/Jonma/Documents/BGU/Thesis/DataSets/ednet'
 users_dir = '%s/KT3' % dataset_dir
 
-# users = [3, 6]
-# lens: [5000    4500    4000    3500    3000    2500    2000    1500    1000    500
-# KBs:  [205     185     165     145     125     105     85      65      45      25
-users = [
-    562650,  # 10000, 405kb
-    549078,  # 9500, 385kb
-    344182,  # 9000, 365kb
-    310618,  # 8500, 345kb
-    577484,  # 8000, 325kb
-    335760,  # 7500, 305kb
-    274205,  # 7000, 285kb
-    656267,  # 6500, 265kb
-    640295,  # 6000, 245kb
-    1655,    # 5500, 225kb
-    503066,  # 5000, 205kb
-    480292,  # 4500, 185kb
-    295872,  # 4000, 165kb
-    357194,  # 3500, 145kb
-    759070,  # 3000, 125kb
-    332183,  # 2500, 105kb
-    342307,  # 2000, 85kb
-    357889,  # 1500, 65kb
-    773623,  # 1000, 45kb
-    533110,  # 500, 25kb
-]
+# users = [
+#     562650,  # 10000, 405kb
+#     549078,  # 9500, 385kb
+#     344182,  # 9000, 365kb
+#     310618,  # 8500, 345kb
+#     577484,  # 8000, 325kb
+#     335760,  # 7500, 305kb
+#     274205,  # 7000, 285kb
+#     656267,  # 6500, 265kb
+#     640295,  # 6000, 245kb
+#     1655,    # 5500, 225kb
+#     503066,  # 5000, 205kb
+#     480292,  # 4500, 185kb
+#     295872,  # 4000, 165kb
+#     357194,  # 3500, 145kb
+#     759070,  # 3000, 125kb
+#     332183,  # 2500, 105kb
+#     342307,  # 2000, 85kb
+#     357889,  # 1500, 65kb
+#     773623,  # 1000, 45kb
+#     533110,  # 500, 25kb
+# ]
 # write_bkt_matrix(users_dir, users, dataset_dir)
 # write_error_rates(users_dir, users, dataset_dir)
+
+# gather_user_meta_data()
+users = get_users(num_users=100, min_size=20, max_size=100)
 extract_features(users_dir, users, dataset_dir)
 
 print('done')
