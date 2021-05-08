@@ -223,11 +223,11 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         hists_already_determined = True
         # experiment settings
         train_frac = 0.6
-        valid_frac = 0.2
+        valid_frac = 0.3
         h1_frac = 0.01  # if > 1 then is considered as num. of samples, not fraction
         h2_len = 10000000
         seeds = range(1)
-        inner_seeds = range(1)
+        inner_seeds = range(3)
         weights_num = 2
         weights_range = [0, 1]
         # user settings
@@ -240,8 +240,9 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
 
         model_params = {
             'name': 'tree',
-            'params': {'ccp_alpha': [0.0001, 0.0005, 0.001, 0.005, 0.01]}
-            # 'params': {'ccp_alpha': [0.001, 0.01]}
+            # 'params': {'ccp_alpha': [0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0]}
+            # 'params': {'ccp_alpha': [0.0001, 0.0005, 0.001, 0.005, 0.01]}
+            'params': {'ccp_alpha': [0.001, 0.01]}
             # 'params': {'ccp_alpha': 0.005}
             # 'params': {'max_depth': 5}
         }

@@ -116,9 +116,9 @@ if __name__ == "__main__":
 
     job_name = f'job_{user_group_idx + 1}_of_{n_user_groups}'
 
-    dataset_name = 'assistment'
+    # dataset_name = 'assistment'
     # dataset_name = 'citizen_science'
-    # dataset_name = 'mooc'
+    dataset_name = 'mooc'
 
     # dataset_name = 'ednet'
     # dataset_name = 'GZ'
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         # 'L6': [1, 1, 0, 1],
         # 'L7': [1, 1, 1, 0],
         # 'L8': [1, 1, 1, 1],
-        'auto': []
+        'auto': 'auto'
     }
 
     # experiment settings
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     # output settings
     only_test = False
     overwrite_result_folder = True
-    reset_cache = True
+    reset_cache = False
     make_tradeoff_plots = True
     show_tradeoff_plots = True
     plot_confusion = False
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     # default settings
     diss_weights = list(np.linspace(0, 1, weights_num))
     model_names = list(models_to_test.keys())
-    no_compat_equality_groups = [['no hist', 'L4', 'L6'], ['L1', 'L2', 'L3'], ['L5', 'L7', 'L8']]
+    no_compat_equality_groups = [['no hist', 'L4', 'L6'], ['L1', 'L2', 'L3'], ['L5', 'L7', 'L8'], ['auto']]
     no_compat_equality_groups_per_model = {}
     for group in no_compat_equality_groups:
         for member in group:
@@ -556,6 +556,9 @@ if __name__ == "__main__":
 
         iterations = sum([timer.iterations for timer in timers])
 
+        if 'auto' in model_names:
+            auto_subset_weights_report_rows = []
+
         # todo: OUTER FOLDS LOOP
         for seed_idx, seed in enumerate(seeds):
 
@@ -629,6 +632,9 @@ if __name__ == "__main__":
                 if evaluating_params:
                     scores_per_user = {u: {m: [] for m in model_names} for u in user_ids}
                     evaluated_params_per_user = {u: {m: [] for m in model_names} for u in user_ids}
+                    if 'auto' in model_names:
+                        best_subset_weights_per_user = {u: [] for u in user_ids}
+                        valid_set_len_per_user = {u: [] for u in user_ids}
 
                 for inner_seed_idx, inner_seed in enumerate(inner_seeds):
 
@@ -851,6 +857,14 @@ if __name__ == "__main__":
                                         else:
                                             scores = scores_per_model[model_name]
                                             scores_per_user[user_id][model_name].append(scores)
+                                            if model_name == 'auto':
+                                                best_subset_weights = [i[1] for i in evaluated_params]
+                                                best_subset_weights_per_user[user_id].append(best_subset_weights)
+                                                valid_set_len_per_user[user_id].append(len(tuning_x))
+                                                subset_weights = best_subset_weights[int(np.argmax(scores))]
+                                                row = [seed, inner_seed, user_id, len(hist_train_x), len(hist_valid_x),
+                                                       *subset_weights]
+                                                auto_subset_weights_report_rows.append(row)
                                         evaluated_params_per_user[user_id][model_name].append(evaluated_params)
 
                         else:
@@ -867,8 +881,14 @@ if __name__ == "__main__":
                                             # model = no_hists[weight_idx]
                                             pass  # maybe implement?
                                         else:
-                                            subset_weights = models_to_test[model_name]
                                             best_params = best_params_per_model.get(model_name, chosen_params)
+                                            if model_name == 'auto':
+                                                best_params, subset_weights = best_params
+                                                # row = [seed, inner_seed, user_id, len(hist_train_x), len(hist_valid_x),
+                                                #        *subset_weights]
+                                                # auto_subset_weights_report_rows.append(row)
+                                            else:
+                                                subset_weights = models_to_test[model_name]
                                             model = Model(model_type, model_name, h1, weight, subset_weights,
                                                           hist_train_range, params=best_params, tune_epochs=tune_epochs)
                                             # print(f'\tinner_seed:{inner_seed} user:{user_id} weight:{weight} '
@@ -928,6 +948,7 @@ if __name__ == "__main__":
                     # end user loop
                 # end inner folds loop
 
+                # todo: GETTING BEST PARAMS ACCORDING TO SCORES AVERAGED OVER ALL INNER FOLDS
                 if evaluating_params and not get_only_h1:
                     # if model_type == 'NN' and tune_epochs:
                     #     best_params_per_user = {
@@ -947,20 +968,36 @@ if __name__ == "__main__":
                     #     }
 
                     best_params_per_user = {}
-                    for u in user_group:
+                    for user_id in user_group:
                         best_params_per_model = {}
-                        best_params_per_user[u] = best_params_per_model
-                        for m in model_names:
-                            if m != 'auto':
-                                if model_type == 'NN' and tune_epochs:
-                                    best_params_per_model[m] = get_chosen_params_for_NN(
-                                        int(np.mean(evaluated_params_per_user[u][m]) - params['_fit_patience']))
+                        best_params_per_user[user_id] = best_params_per_model
+                        for model_name in model_names:
+                            if model_type == 'NN' and tune_epochs:
+                                best_params_per_model[model_name] = get_chosen_params_for_NN(
+                                    int(np.mean(evaluated_params_per_user[user_id][model_name]) - params[
+                                        '_fit_patience']))
+                            else:
+                                best_score_index = np.argmax(np.mean(scores_per_user[user_id][model_name], axis=0))
+                                if model_name == 'auto':
+                                    # best_subset_weights =
+                                    best_subset_weights_per_inner_seed = [
+                                        i[best_score_index] for i in best_subset_weights_per_user[user_id]]
+                                    mean_best_subset_weights = np.average(
+                                        best_subset_weights_per_inner_seed, axis=0,
+                                        weights=valid_set_len_per_user[user_id])
+                                    best_params = [params_list[best_score_index], list(mean_best_subset_weights)]
                                 else:
-                                    best_params_per_model[m] = params_list[
-                                        np.argmax(np.mean(scores_per_user[u][m], axis=0))]
-
+                                    best_params = params_list[best_score_index]
+                                best_params_per_model[model_name] = best_params
 
             # end train and validation loop
+
+            if 'auto' in model_names:
+                pd.DataFrame(auto_subset_weights_report_rows,
+                             columns=['seed', 'inner_seed', 'user', 'train_len', 'valid_len',
+                                      *[f'w{i}' for i in range(4)]]
+                             ).to_csv(f'{result_type_dir}/{metric}/logs_{job_name}/auto_subset_weights_report.csv',
+                                      index=False)
 
             # todo: FINAL TESTING OF MODELS
             user_count = 0
@@ -1001,8 +1038,11 @@ if __name__ == "__main__":
                             # model = no_hists[weight_idx]
                             pass  # maybe implement?
                         else:
-                            subset_weights = models_to_test[model_name]
                             best_params = best_params_per_model.get(model_name, chosen_params)
+                            if model_name == 'auto':
+                                best_params, subset_weights = best_params
+                            else:
+                                subset_weights = models_to_test[model_name]
                             model = Model(model_type, model_name, h1, weight, subset_weights,
                                           hist_train_and_valid_range, params=best_params, tune_epochs=tune_epochs)
                             model.fit(h2_train_and_valid_x, h2_train_and_valid_y)

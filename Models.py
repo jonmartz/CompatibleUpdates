@@ -6,6 +6,7 @@ from sklearn.svm import SVC
 # from xgboost import XGBClassifier
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from sklearn.dummy import DummyClassifier
+from bayes_opt import BayesianOptimization
 
 
 class Model:
@@ -206,25 +207,84 @@ def evaluate_params_step(model_type, train_x, train_y, valid_x, valid_y, metric,
         if subset_weights is None:  # pre-update model
             model = Model(model_type, params=params, tune_epochs=tune_epochs)
         else:  # baseline or personalized model
-            if get_autc:  # todo: doesn't work with NNs
-                coms, pers = [], []
-                for weight in np.linspace(0, 1, weights_num):
-                    model = Model(model_type, '', old_model, weight, subset_weights, hist_range, params,
-                                  tune_epochs=tune_epochs)
-                    model.fit(train_x, train_y, valid_x, valid_y)
-                    result = model.score(valid_x, valid_y, metric)
-                    coms.append(result['x'])
-                    pers.append(result['y'])
-                for i in range(1, len(coms)):  # make coms monotonically increasing for auc computation
-                    if coms[i] < coms[i - 1]:
-                        coms[i] = coms[i - 1]
-                return auc([0] + coms, [pers[0]] + pers), params  # correct leftwards for fairness
+            if get_autc:  # todo: doesn't work with model_type='NN' or subset_weights='auto'
+                auc = train_and_validate_model(model_type, old_model, train_x, train_y, valid_x, valid_y,
+                                               subset_weights, hist_range, params, metric)
+                return auc, params
             else:
-                model = Model(model_type, '', old_model, 0, subset_weights, hist_range, params, tune_epochs=tune_epochs)
+                if subset_weights == 'auto':
+                    model = BayesianOptimizer(model_type, old_model, train_x, train_y, valid_x, valid_y, hist_range,
+                                              params, metric).get_best_model()
+                else:
+                    model = Model(model_type, '', old_model, 0, subset_weights, hist_range, params,
+                                  tune_epochs=tune_epochs)
         fit_return = model.fit(train_x, train_y, valid_x, valid_y)
-        if model_type == 'NN' and tune_epochs:
+        if model_type == 'NN' and tune_epochs:  # todo: doesnt support subset_weights='auto'
             params = fit_return  # will be the optimal num of epochs (to not under/over-fit)
             score = fit_return.history['val_acc'][-model.fit_params['patience']]
         else:
             score = model.score(valid_x, valid_y, metric)['y']
-        return score, params
+        if subset_weights == 'auto':
+            return score, [params, model.subset_weights]
+        else:
+            return score, params
+
+
+# todo: do not supports NNs
+def train_and_validate_model(model_type, old_model, train_x, train_y, valid_x, valid_y, subset_weights, hist_range,
+                             params, metric, weights_num=2):
+    compatibilities, performances = [], []
+    for weight in np.linspace(0, 1, weights_num):
+        model = Model(model_type, '', old_model, weight, subset_weights, hist_range, params)
+        model.fit(train_x, train_y, valid_x, valid_y)
+        result = model.score(valid_x, valid_y, metric)
+        compatibilities.append(result['x'])
+        performances.append(result['y'])
+    for i in range(1, len(compatibilities)):  # make coms monotonically increasing for auc computation
+        if compatibilities[i] < compatibilities[i - 1]:
+            compatibilities[i] = compatibilities[i - 1]
+    return auc([0] + compatibilities, [performances[0]] + performances)  # correct leftwards for fairness
+
+
+class BayesianOptimizer:
+    def __init__(self, model_type, old_model, train_x, train_y, valid_x, valid_y, hist_range, params, metric):
+        self.model_type = model_type
+        self.old_model = old_model
+        self.train_x = train_x
+        self.train_y = train_y
+        self.valid_x = valid_x
+        self.valid_y = valid_y
+        self.hist_range = hist_range
+        self.params = params
+        self.metric = metric
+        
+        self.pbounds = {f'w{i}': (0, 1) for i in range(4)}
+        self.default_weights = [
+            [1, 1, 0, 0],
+            [0, 0, 1, 1],
+            [0, 1, 1, 0],
+            [0, 1, 1, 1],
+            [1, 0, 0, 1],
+            [1, 0, 1, 1],
+            [1, 1, 0, 1],
+            [1, 1, 1, 0],
+            [1, 1, 1, 1],
+        ]
+
+    def get_best_model(self, init_points=5, n_iter=25, probe_default_params=True):
+        optimizer = BayesianOptimization(self.optimization_step, self.pbounds, random_state=1)
+        if probe_default_params:
+            for weights in self.default_weights:
+                optimizer.probe(weights)
+        try:
+            optimizer.maximize(init_points=init_points, n_iter=n_iter)
+            best_subset_weights = list(optimizer.max['params'].values())
+        except ValueError:
+            best_subset_weights = self.default_weights[0]
+        return Model(self.model_type, '', self.old_model, 0, best_subset_weights, self.hist_range, self.params)
+
+    def optimization_step(self, w0, w1, w2, w3):
+        subset_weights = [w0, w1, w2, w3]
+        auc = train_and_validate_model(self.model_type, self.old_model, self.train_x, self.train_y, self.valid_x,
+                                       self.valid_y, subset_weights, self.hist_range, self.params, self.metric)
+        return auc
