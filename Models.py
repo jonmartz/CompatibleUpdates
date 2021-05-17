@@ -271,7 +271,7 @@ class BayesianOptimizer:
             [1, 1, 1, 1],
         ]
 
-    def get_best_model(self, init_points=5, n_iter=25, probe_default_params=True):
+    def get_best_model(self, init_points=5, n_iter=100, probe_default_params=True):
         optimizer = BayesianOptimization(self.optimization_step, self.pbounds, random_state=1)
         if probe_default_params:
             for weights in self.default_weights:

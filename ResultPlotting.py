@@ -2027,14 +2027,14 @@ if __name__ == "__main__":
 
     if not use_autoML:
         phases = [
-            'merge logs',
-            'binarize train results',
-            'binarize validation results',
-            'binarize test results',
-            'get autcs averaged over inner seeds for train bins',
-            'get autcs averaged over inner seeds for validation bins',
-            'get autcs averaged over inner seeds for test bins',
-            'get best_u for each user using binarized train results',
+            # 'merge logs',
+            # 'binarize train results',
+            # 'binarize validation results',
+            # 'binarize test results',
+            # 'get autcs averaged over inner seeds for train bins',
+            # 'get autcs averaged over inner seeds for validation bins',
+            # 'get autcs averaged over inner seeds for test bins',
+            # 'get best_u for each user using binarized train results',
             'get best_u for each user using binarized validation results',
             'add best_u computed from validation to binarized test results',
             'get best_u for each user using binarized test results',
@@ -2092,8 +2092,8 @@ if __name__ == "__main__":
             # 'get autcs averaged over inner seeds for test bins with best',
         ]
 
-    dataset = 'assistment'
-    # dataset = 'mooc'
+    # dataset = 'assistment'
+    dataset = 'mooc'
     # dataset = 'citizen_science'
     # dataset = 'ednet'
     # dataset = 'salaries'

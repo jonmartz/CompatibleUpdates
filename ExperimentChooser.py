@@ -227,7 +227,7 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         h1_frac = 0.01  # if > 1 then is considered as num. of samples, not fraction
         h2_len = 10000000
         seeds = range(1)
-        inner_seeds = range(3)
+        inner_seeds = range(10)
         weights_num = 2
         weights_range = [0, 1]
         # user settings
@@ -278,7 +278,8 @@ def get_experiment_parameters(dataset_name, result_analysis=False):
         # version = '30 users NNs'
         # version = '250 users'
         # version = 'NN [256]'
-        version = '250 users NN [256] 50 eps'
+        # version = '250 users NN [256] 50 eps'
+        version = 'auto'
 
         # version = 'abs AUTC tree'
         # version = 'abs AUTC NN'
